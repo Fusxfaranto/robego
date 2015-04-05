@@ -136,7 +136,6 @@ void main()
     
     
     // main loop
-    
     char[IRC_BUF_LEN] irc_buf = 0;
     char[UDS_BUF_LEN] uds_buf = 0;
     char[] irc_extra = "".dup;
