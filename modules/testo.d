@@ -25,7 +25,7 @@ static this()
     m.commands["quit"] = function void(Client c, in char[] n, in char[] t)
         {
             c.send_raw("QUIT :quitting from command");
-            c.push_lazy_queue({Runtime.terminate();});
+            c.push_lazy_queue({c.will_quit = true;});
         };
     m.listeners["PRIVMSG"] = function void(Client c, in char[] t)
         {

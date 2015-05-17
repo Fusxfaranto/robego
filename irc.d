@@ -37,13 +37,14 @@ class Client
         
         bool ready = false;
         bool uds_connected = false;
+        bool will_quit = false;
         Socket irc_socket;
         Socket uds_server;
         Socket uds_socket;
         
         this()
         {
-            //reload();
+            reload();
 
             sockset = new SocketSet(8);
             // init irc_socket
@@ -86,6 +87,7 @@ class Client
         ~this()
         {
             debug writeln("Client destructor");
+            unload_dynamics(commands, listeners);
             assert(irc_socket);
             irc_socket.shutdown(SocketShutdown.BOTH);
             irc_socket.close();
@@ -157,13 +159,13 @@ class Client
             else message = "";
 
             /*debug
-            {
-                write("source:  "); writeln(source);
-                write("command: "); writeln(command);
-                write("args:    "); writeln(args);
-                write("message: "); writeln(message);
-                writeln();
-            }*/
+              {
+              write("source:  "); writeln(source);
+              write("command: "); writeln(command);
+              write("args:    "); writeln(args);
+              write("message: "); writeln(message);
+              writeln();
+              }*/
 
             // TODO: exec listeners
 
@@ -278,6 +280,8 @@ class Client
                     //debug writeln();
                     //debug writeln();
                     //writeln(irc_socket.send(buf));
+                    import core.runtime;
+                    if (irc_n == 333) break;
                 }
                 if (!uds_connected && sockset.isSet(uds_server))
                 {
@@ -312,14 +316,14 @@ class Client
                     lazy_queue.removeFront();
                 }
 
+                if (will_quit)
+                {
+                    debug send_raw("QUIT :quitting from will_quit");
+                    debug writeln("quitting from will_quit");
+                    break;
+                }
+
                 debug stdout.flush();
             }
         }
-}
-
-
-static ~this()
-{
-    debug writeln("irc destructor");
-    debug stdout.flush();
 }

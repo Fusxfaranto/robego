@@ -24,19 +24,27 @@ void check_dlerror(in string s)
 
 void*[] dlopen_ptrs = [];
 
-void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] listeners)
+void unload_dynamics(ref command_t[string] commands, ref listener_t[][string] listeners)
 {
+    debug writeln("unload_dynamics");
     commands = command_t[string].init;
     listeners = listener_t[][string].init;
     foreach (p; dlopen_ptrs)
     {
-        writeln(p);
-        stdout.flush;
+        debug writeln(p);
         dlclose(p);
     }
+    dlopen_ptrs = [];
+}
+
+void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] listeners)
+{
+    unload_dynamics(commands, listeners);
 
     foreach (string so_name; dirEntries("./modules/", "*.so", SpanMode.shallow))
     {
+        debug writeln("loading " ~ so_name);
+
         void* p = dlopen(so_name.toStringz(), RTLD_LAZY);
         check_dlerror("loading " ~ so_name);
 

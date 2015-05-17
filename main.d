@@ -14,3 +14,11 @@ void main()
     debug writeln("end of main");
     debug stdout.flush();
 }
+
+
+
+static ~this()
+{
+    debug writeln("main destructor");
+    debug stdout.flush();
+}
