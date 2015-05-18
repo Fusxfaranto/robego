@@ -18,6 +18,7 @@ immutable int UDS_BUF_LEN = 512;
 immutable char COMMAND_CHAR = ',';
 
 
+
 // TODO: make "final class"?
 class Client
 {
@@ -318,7 +319,6 @@ class Client
 
                 if (will_quit)
                 {
-                    debug send_raw("QUIT :quitting from will_quit");
                     debug writeln("quitting from will_quit");
                     break;
                 }

@@ -1,9 +1,9 @@
 
 import module_base;
-import std.stdio;
-import core.runtime;
 
 extern (C) IRCModule m;
+
+import std.stdio;
 
 static this()
 {
@@ -25,7 +25,8 @@ static this()
     m.commands["quit"] = function void(Client c, in char[] n, in char[] t)
         {
             c.send_raw("QUIT :quitting from command");
-            c.push_lazy_queue({c.will_quit = true;});
+            c.will_quit = true;
+            //c.push_lazy_queue({c.push_lazy_queue({});});
         };
     m.listeners["PRIVMSG"] = function void(Client c, in char[] t)
         {
