@@ -15,7 +15,7 @@ static this()
             writeln(t);
             c.send_raw("PRIVMSG #fusxbottest :<" ~ n ~ "> " ~ t/* ~ " poop"*/);
             c.delayed_callback({writeln("lazy");});
-            c.delayed_callback({c.send_raw("PRIVMSG #fusxbottest :lazy");});
+            c.delayed_callback({c.send_raw("PRIVMSG #fusxbottest :lazy poop");});
         };
     m.commands["reload"] = function void(Client c, in char[] n, in char[] t)
         {

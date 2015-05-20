@@ -7,6 +7,7 @@ import std.conv : to;
 import io = std.stdio : writeln/*, writefln*/, write, stdout;
 import std.file : dirEntries, SpanMode;
 import std.string : toStringz;
+import std.process : spawnProcess, wait;
 
 class Dl_exception : Exception
 {
@@ -39,6 +40,13 @@ void unload_dynamics(ref command_t[string] commands, ref listener_t[][string] li
 
 void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] listeners)
 {
+    auto compilation_pid = spawnProcess(["make", "dynamic"]);
+    if (wait(compilation_pid) != 0)
+    {
+        debug writeln("compilation failed");
+        return;
+    }
+
     unload_dynamics(commands, listeners);
 
     foreach (string so_name; dirEntries("./modules/", "*.so", SpanMode.shallow))
