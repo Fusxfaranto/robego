@@ -14,19 +14,19 @@ static this()
             writeln(n);
             writeln(t);
             c.send_raw("PRIVMSG #fusxbottest :<" ~ n ~ "> " ~ t/* ~ " poop"*/);
-            c.push_lazy_queue({c.send_raw("PRIVMSG #fusxbottest :lazy");});
+            c.delayed_callback({writeln("lazy");});
+            c.delayed_callback({c.send_raw("PRIVMSG #fusxbottest :lazy");});
         };
     m.commands["reload"] = function void(Client c, in char[] n, in char[] t)
         {
             writeln("reload command");
-            c.push_lazy_queue({c.reload();});
             c.send_raw("PRIVMSG #fusxbottest :reload queued");
+            c.delayed_reload();
         };
     m.commands["quit"] = function void(Client c, in char[] n, in char[] t)
         {
             c.send_raw("QUIT :quitting from command");
-            c.will_quit = true;
-            //c.push_lazy_queue({c.push_lazy_queue({});});
+            c.delayed_quit();
         };
     m.listeners["PRIVMSG"] = function void(Client c, in char[] t)
         {

@@ -12,11 +12,16 @@ import module_base;
 
 
 
-immutable string SOCK_FILENAME = "./sock";
-immutable int IRC_BUF_LEN = 512;
-immutable int UDS_BUF_LEN = 512;
-immutable char COMMAND_CHAR = ',';
+enum string SOCK_FILENAME = "./sock";
+enum int IRC_BUF_LEN = 512;
+enum int UDS_BUF_LEN = 512;
+enum char COMMAND_CHAR = ',';
 
+
+interface DelayedAction {}
+class DelayedQuit : DelayedAction {}
+class DelayedReload : DelayedAction {}
+class DelayedCallback : DelayedAction {void delegate() d; this(void delegate() dn) {d = dn;}}
 
 
 // TODO: make "final class"?
@@ -27,7 +32,7 @@ class Client
         command_t[string] commands;
         listener_t[][string] listeners;
 
-        auto lazy_queue = DList!(void delegate())();
+        auto delayed_queue = DList!(DelayedAction)();
 
         
     public:
@@ -38,7 +43,6 @@ class Client
         
         bool ready = false;
         bool uds_connected = false;
-        bool will_quit = false;
         Socket irc_socket;
         Socket uds_server;
         Socket uds_socket;
@@ -105,10 +109,9 @@ class Client
             debug stdout.flush();
         }
 
-        void push_lazy_queue(void delegate() exp)
-        {
-            lazy_queue.insertBack(exp);
-        }
+        void delayed_quit() {delayed_queue.insertBack(new DelayedQuit());}
+        void delayed_reload() {delayed_queue.insertBack(new DelayedReload());}
+        void delayed_callback(void delegate() l) {delayed_queue.insertBack(new DelayedCallback(l));}
 
         void reload()
         {
@@ -187,11 +190,11 @@ class Client
                 {
                     (*p)(this, source, message);
                 }
-                if (message == ",asdf")
-                {
-                    import core.runtime;
-                    Runtime.terminate();
-                }
+                // if (message == ",asdf")
+                // {
+                //     import core.runtime;
+                //     Runtime.terminate();
+                // }
             }
 
 /*            if (splitted_line[0] == "PING")
@@ -311,16 +314,29 @@ class Client
                     }
                 }
 
-                while (!lazy_queue.empty())
+                while (!delayed_queue.empty())
                 {
-                    lazy_queue.front()();
-                    lazy_queue.removeFront();
-                }
+                    DelayedAction f = delayed_queue.front();
+                    if (cast(DelayedQuit) f)
+                    {
+                        debug writeln("quitting from DelayedQuit");
+                        return;
+                    }
+                    else if (cast(DelayedReload) f)
+                    {
+                        debug writeln("reloading from DelayedReload");
+                        reload();
+                        debug writeln("reloaded");
+                    }
+                    else if (auto c = cast(DelayedCallback) f)
+                    {
+                        debug writeln("running callback from DelayedCallback");
+                        c.d();
+                        debug writeln("finished callback");
+                    }
+                    else assert(0, "no matching type in delayed_queue");
 
-                if (will_quit)
-                {
-                    debug writeln("quitting from will_quit");
-                    break;
+                    delayed_queue.removeFront();
                 }
 
                 debug stdout.flush();
