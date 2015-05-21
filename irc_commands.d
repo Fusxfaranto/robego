@@ -9,7 +9,7 @@ import std.file : dirEntries, SpanMode;
 import std.string : toStringz;
 import std.process : spawnProcess, wait;
 
-class Dl_exception : Exception
+class DLException : Exception
 {
     public:
         this(string msg) {super(msg);}
@@ -19,7 +19,7 @@ void check_dlerror(in string s)
 {
     if (char* e = dlerror())
     {
-        throw new Dl_exception(s ~ " - " ~ to!string(e));
+        throw new DLException(s ~ " - " ~ to!string(e));
     }
 }
 
@@ -43,7 +43,7 @@ void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] li
     auto compilation_pid = spawnProcess(["make", "dynamic"]);
     if (wait(compilation_pid) != 0)
     {
-        debug writeln("compilation failed");
+        debug writeln("compilation failed, not reloading");
         return;
     }
 
@@ -72,39 +72,3 @@ void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] li
     commands.rehash();
     listeners.rehash();
 }
-
-//void* p;
-/*
-  static this()
-  {
-  // command[string] commands;
-  // listener[][string] listeners;
-  // reload_dynamics(commands, listeners);
-  // writeln(commands);
-  // writeln(listeners);
-
-  // p = dlopen("./modules/testo.so", RTLD_LAZY);
-  // check_dlerror("loading testo.so error");
-
-  // // auto f = cast(void function())dlsym(p, "testo");
-  // // check_dlerror("importing testo error");
-  // // f();
-
-  // auto m = *(cast(IRCModule*)(dlsym(p, "m")));
-  // check_dlerror("importing commands error");
-  // writeln(m);
-  }
-
-
-  static ~this()
-  {
-  // foreach (p; dlopen_ptrs)
-  // {
-  //     writeln(p);
-  //     stdout.flush;
-  //     dlclose(p);
-  // }
-  debug writeln("irc_commands destructor");
-  debug stdout.flush();
-  }
-*/

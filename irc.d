@@ -1,3 +1,5 @@
+debug(prof) debug = 1;
+
 import io = std.stdio : writeln, writefln, stdout;
 import std.conv : to;
 import std.socket;
@@ -5,6 +7,7 @@ import core.thread : sleep/*, dur*/;
 import std.file : exists, remove;
 import std.array : split, appender;
 import std.container.dlist : DList;
+debug(prof) import std.datetime : StopWatch;
 
 import util;
 import irc_commands;
@@ -33,6 +36,8 @@ class Client
         listener_t[][string] listeners;
 
         auto delayed_queue = DList!(DelayedAction)();
+
+        debug(prof) StopWatch sw;
 
         
     public:
@@ -78,10 +83,10 @@ class Client
                 assert(t.length);
                 addr = t[0];
             }
-            writeln(addr);
+            debug writeln(addr);
             irc_socket.connect(addr);
-            writeln("connected!");
-            writeln();
+            debug writeln("connected!");
+            debug writeln();
 
     
             // init rest of irc state
@@ -130,6 +135,7 @@ class Client
         void process_line(in char[] line)
         {
             debug writeln(line);
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
 
             auto index = 0; // TODO: is this the proper type?
             const(char)[] source;
@@ -162,6 +168,8 @@ class Client
             if (index < line.length) message = line[(index + 1)..$];
             else message = "";
 
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+
             /*debug
               {
               write("source:  "); writeln(source);
@@ -188,7 +196,9 @@ class Client
             {
                 if (command_t* p = message[1..$] in commands)
                 {
+                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                     (*p)(this, source, message);
+                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 }
                 // if (message == ",asdf")
                 // {
@@ -196,30 +206,11 @@ class Client
                 //     Runtime.terminate();
                 // }
             }
-
-/*            if (splitted_line[0] == "PING")
-              {
-              send_raw("PONG " ~ splitted_line[1]);
-              debug writeln("sent pong");
-              if (!ready)
-              {
-              ready = true;
-              send_raw("JOIN :#fusxbottest"); // TODO: configureable channels
-              }
-              return;
-              }
-              if (splitted_line[1] == "PRIVMSG" && splitted_line[3].length >= 3
-              && splitted_line[3][1] == COMMAND_CHAR)
-              {
-              if (command* p = splitted_line[3][2..$] in commands)
-              {
-              (*p)(this, "fff", "aaa");
-              }
-              }*/
         }
 
         void extract_run_lines(ref char[IRC_BUF_LEN] buf, in long len, ref char[] extra)
         {
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             int index = -1;
             bool has_r = (extra.length && extra[$ - 1] == '\r');
 
@@ -254,38 +245,30 @@ class Client
         
         void run_loop()
         {
-            // main loop
             char[IRC_BUF_LEN] irc_buf = 0;
             char[UDS_BUF_LEN] uds_buf = 0;
             char[] irc_extra = "".dup;
             long irc_n, uds_n;
             while (true)
             {
-                scope(exit)
-                {
-                    sockset.reset();
-                    sockset.add(irc_socket);
-                    if (uds_connected)
-                        sockset.add(uds_socket);
-                    else
-                        sockset.add(uds_server);  
-                }
-        
                 assert(Socket.select(sockset, null, null) > 0);
                 if (sockset.isSet(irc_socket))
                 {
+                    debug(prof) sw.start();
                     irc_n = irc_socket.receive(irc_buf);
                     assert(irc_n > 0);
+
+                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         
                     //debug writeln();
                     //debug writeln(n);
                     //debug writeln(buf/*[0..n]*/);
                     extract_run_lines(irc_buf, irc_n, irc_extra);
+                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                     //debug writeln();
                     //debug writeln();
                     //writeln(irc_socket.send(buf));
-                    import core.runtime;
-                    if (irc_n == 333) break;
+                    debug if (irc_n == 333) break;
                 }
                 if (!uds_connected && sockset.isSet(uds_server))
                 {
@@ -338,6 +321,23 @@ class Client
 
                     delayed_queue.removeFront();
                 }
+
+                sockset.reset();
+                sockset.add(irc_socket);
+                if (uds_connected)
+                    sockset.add(uds_socket);
+                else
+                    sockset.add(uds_server);
+
+                debug(prof)
+                    if (sw.running())
+                    {
+                        sw.stop();
+                        writeln(__LINE__, ' ', sw.peek().usecs);
+                        writeln();
+                        stdout.flush();
+                        sw.reset();
+                    }
 
                 debug stdout.flush();
             }
