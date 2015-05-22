@@ -128,8 +128,10 @@ class Client
 
         void send_raw(in char[] line)
         {
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             assert(line.length < 510);
             assert(irc_socket.send(line ~ "\r\n") == line.length + 2);
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         }
 
         void process_line(in char[] line)
@@ -138,6 +140,7 @@ class Client
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
 
             auto index = 0; // TODO: is this the proper type?
+            //pragma(msg, typeof(index));
             const(char)[] source;
             if (line[0] == ':')
             {
@@ -179,8 +182,6 @@ class Client
               writeln();
               }*/
 
-            // TODO: exec listeners
-
             if (command == "PING")
             {
                 send_raw("PONG :" ~ message);
@@ -200,11 +201,14 @@ class Client
                     (*p)(this, source, message);
                     debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 }
-                // if (message == ",asdf")
-                // {
-                //     import core.runtime;
-                //     Runtime.terminate();
-                // }
+            }
+
+            if (listener_t[]* p = command in listeners)
+            {
+                debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+                foreach (f; *p)
+                    f(this, source, args, message);
+                debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             }
         }
 

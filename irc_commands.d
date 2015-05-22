@@ -44,6 +44,7 @@ void reload_dynamics(ref command_t[string] commands, ref listener_t[][string] li
     if (wait(compilation_pid) != 0)
     {
         debug writeln("compilation failed, not reloading");
+        debug assert(0);
         return;
     }
 
