@@ -13,20 +13,21 @@ static this()
             writeln(source);
             writeln(message);
             c.send_raw("PRIVMSG #fusxbottest :<" ~ source ~ "> " ~ message/* ~ " poop"*/);
-            c.delayed_callback({writeln("lazy");});
-            c.delayed_callback({c.send_raw("PRIVMSG #fusxbottest :lazy");});
+            c.delayed_actions.insert(new DelayedCallback({writeln("lazy");}));
+            c.delayed_actions.insert(new DelayedCallback({c.send_raw("PRIVMSG #fusxbottest :lazy");}, 10000));
         };
     m.commands["reload"] = function void(Client c, in char[] source, in char[] message)
         {
             writeln("reload command");
             c.send_raw("PRIVMSG #fusxbottest :reload queued");
-            c.delayed_reload();
+            c.delayed_actions.insert(new DelayedReload());
         };
     m.commands["quit"] = function void(Client c, in char[] source, in char[] message)
         {
             c.send_raw("QUIT :quitting from command");
-            c.delayed_quit();
+            c.delayed_actions.insert(new DelayedQuit());
         };
+    m.commands["null"] = null;
     m.listeners["PRIVMSG"] = function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
             writeln("testo privmsg listener");

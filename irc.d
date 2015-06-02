@@ -6,25 +6,21 @@ import std.socket;
 import core.thread : sleep/*, dur*/;
 import std.file : exists, remove;
 import std.array : split, appender;
-import std.container.dlist : DList;
+//import std.container.dlist : DList;
 debug(prof) import std.datetime : StopWatch;
 
 import util;
 import irc_commands;
 import module_base;
-
+public import delayed_action;
 
 
 enum string SOCK_FILENAME = "./sock";
 enum int IRC_BUF_LEN = 512;
 enum int UDS_BUF_LEN = 512;
 enum char COMMAND_CHAR = ',';
-
-
-interface DelayedAction {}
-class DelayedQuit : DelayedAction {}
-class DelayedReload : DelayedAction {}
-class DelayedCallback : DelayedAction {void delegate() d; this(void delegate() dn) {d = dn;}}
+enum long SELECT_WAIT_MICROSECONDS = 0;
+enum long SELECT_WAIT_SECONDS = 1;
 
 
 // TODO: make "final class"?
@@ -35,8 +31,6 @@ class Client
         command_t[string] commands;
         listener_t[][string] listeners;
 
-        auto delayed_queue = DList!(DelayedAction)();
-
         debug(prof) StopWatch sw;
 
         
@@ -45,6 +39,8 @@ class Client
         string username = "Robego";
         string realname = "Robego";
         string[] channels = ["#fusxbottest"];
+
+        auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
         
         bool ready = false;
         bool uds_connected = false;
@@ -56,7 +52,7 @@ class Client
         {
             reload();
 
-            sockset = new SocketSet(8);
+            sockset = new SocketSet(8); // TODO: figure out why this needs to be 8
             // init irc_socket
             irc_socket = new Socket(AddressFamily.INET, SocketType.STREAM);
     
@@ -113,10 +109,6 @@ class Client
             debug writeln("finished Client destructor");
             debug stdout.flush();
         }
-
-        void delayed_quit() {delayed_queue.insertBack(new DelayedQuit());}
-        void delayed_reload() {delayed_queue.insertBack(new DelayedReload());}
-        void delayed_callback(void delegate() l) {delayed_queue.insertBack(new DelayedCallback(l));}
 
         void reload()
         {
@@ -253,9 +245,12 @@ class Client
             char[UDS_BUF_LEN] uds_buf = 0;
             char[] irc_extra = "".dup;
             long irc_n, uds_n;
+            TimeVal select_wait_time;
+            select_wait_time.microseconds = SELECT_WAIT_MICROSECONDS;
+            select_wait_time.seconds = SELECT_WAIT_SECONDS;
             while (true)
             {
-                assert(Socket.select(sockset, null, null) > 0);
+                Socket.select(sockset, null, null, &select_wait_time);
                 if (sockset.isSet(irc_socket))
                 {
                     debug(prof) sw.start();
@@ -301,29 +296,30 @@ class Client
                     }
                 }
 
-                while (!delayed_queue.empty())
+                while (delayed_actions.has_items() &&
+                       delayed_actions.front.time < MonoTime.currTime())
                 {
-                    DelayedAction f = delayed_queue.front();
-                    if (cast(DelayedQuit) f)
+                    DelayedAction action = delayed_actions.front();
+                    if (cast(DelayedQuit) action)
                     {
                         debug writeln("quitting from DelayedQuit");
                         return;
                     }
-                    else if (cast(DelayedReload) f)
+                    else if (cast(DelayedReload) action)
                     {
                         debug writeln("reloading from DelayedReload");
                         reload();
                         debug writeln("reloaded");
                     }
-                    else if (auto c = cast(DelayedCallback) f)
+                    else if (auto a = cast(DelayedCallback) action)
                     {
                         debug writeln("running callback from DelayedCallback");
-                        c.d();
+                        a.cb();
                         debug writeln("finished callback");
                     }
                     else assert(0, "no matching type in delayed_queue");
 
-                    delayed_queue.removeFront();
+                    delayed_actions.pop();
                 }
 
                 sockset.reset();
@@ -332,6 +328,9 @@ class Client
                     sockset.add(uds_socket);
                 else
                     sockset.add(uds_server);
+
+                select_wait_time.microseconds = SELECT_WAIT_MICROSECONDS;
+                select_wait_time.seconds = SELECT_WAIT_SECONDS;
 
                 debug(prof)
                     if (sw.running())

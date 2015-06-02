@@ -1,5 +1,5 @@
 
-public import irc : Client;
+public import irc;
 
 alias listener_t = void function(Client, in char[], in char[][], in char[]);
 alias command_t = void function(Client, in char[], in char[]);
