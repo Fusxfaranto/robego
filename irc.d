@@ -34,10 +34,11 @@ final class Client
 
         
     public:
-        string nick = "Robego";
-        string username = "Robego";
-        string realname = "Robego";
-        string[] channels = ["#fusxbottest"];
+        string nick;
+        string username;
+        string realname;
+        string[] channels;
+        string network;
 
         auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
         
@@ -47,8 +48,14 @@ final class Client
         Socket uds_server;
         Socket uds_socket;
         
-        this()
+        this(string n, string u, string r, string w, string[] c)
         {
+            nick = n;
+            username = u;
+            realname = r;
+            channels = c;
+            network = w;
+
             reload();
 
             sockset = new SocketSet(8); // TODO: figure out why this needs to be 8
@@ -74,7 +81,7 @@ final class Client
             // connect irc socket
             Address addr;
             {
-                auto t = getAddress("irc.synirc.net", 6667);
+                auto t = getAddress(network, 6667);
                 assert(t.length);
                 addr = t[0];
             }

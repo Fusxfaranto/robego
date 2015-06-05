@@ -7,7 +7,7 @@ debug import std.stdio;
 
 void main()
 {
-    auto c = new Client();
+    auto c = new Client("Robego", "Robego", "Robego", "irc.synirc.net", ["#fusxbottest"]);
 
     c.run_loop();
 
