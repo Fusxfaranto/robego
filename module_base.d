@@ -1,12 +1,20 @@
 
 public import irc;
 
-alias listener_t = void function(Client, in char[], in char[][], in char[]);
-alias command_t = void function(Client, in char[], in char[]);
+struct Command
+{
+    // TODO: implement permissions
+    void function(Client, in char[], in char[]) f;
+}
 
-// TODO: figure out why using the aliases doesn't work for these ???
+struct Listener
+{
+    // TODO: implement disableability
+    void function(Client, in char[], in char[][], in char[]) f;
+}
+
 struct IRCModule
 {
-    void function(Client, in char[], in char[][], in char[])[string] listeners;
-    void function(Client, in char[], in char[])[string] commands;
+    Listener[string] listeners;
+    Command[string] commands;
 }

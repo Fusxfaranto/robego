@@ -23,13 +23,12 @@ enum long SELECT_WAIT_MICROSECONDS = 0;
 enum long SELECT_WAIT_SECONDS = 1;
 
 
-// TODO: make "final class"?
-class Client
+final class Client
 {
     private:
         SocketSet sockset;
-        command_t[string] commands;
-        listener_t[][string] listeners;
+        Command[string] commands;
+        Listener[][string] listeners;
 
         debug(prof) StopWatch sw;
 
@@ -187,19 +186,19 @@ class Client
             }
             if (command == "PRIVMSG" && message.length >= 2 && message[0] == COMMAND_CHAR)
             {
-                if (command_t* p = message[1..$] in commands)
+                if (Command* p = message[1..$] in commands)
                 {
                     debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-                    (*p)(this, source, message);
+                    (*p).f(this, source, message);
                     debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 }
             }
 
-            if (listener_t[]* p = command in listeners)
+            if (Listener[]* p = command in listeners)
             {
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 foreach (f; *p)
-                    f(this, source, args, message);
+                    f.f(this, source, args, message);
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             }
         }
