@@ -13,6 +13,7 @@ import util;
 import irc_commands;
 import module_base;
 public import delayed_action;
+public import user;
 
 
 enum string SOCK_FILENAME = "./sock";
@@ -27,8 +28,6 @@ final class Client
 {
     private:
         SocketSet sockset;
-        Command[string] commands;
-        Listener[][string] listeners;
 
         debug(prof) StopWatch sw;
 
@@ -37,10 +36,16 @@ final class Client
         string nick;
         string username;
         string realname;
-        string[] channels;
         string network;
+        string[] initial_channels;
+
+        GlobalUser[string] users;
+        Channel[string] channels;
 
         auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
+
+        Command*[string] commands;
+        Listener*[][string] listeners;
         
         bool ready = false;
         bool uds_connected = false;
@@ -53,10 +58,8 @@ final class Client
             nick = n;
             username = u;
             realname = r;
-            channels = c;
             network = w;
-
-            reload();
+            initial_channels = c;
 
             sockset = new SocketSet(8); // TODO: figure out why this needs to be 8
             // init irc_socket
@@ -92,8 +95,11 @@ final class Client
 
     
             // init rest of irc state
-            send_raw("NICK " ~ nick);
-            send_raw("USER " ~ username ~ " 0 * :" ~ realname);
+            send_raw("NICK ", nick);
+            send_raw("USER ", username, " 0 * :", realname);
+
+
+            reload();
         }
 
         ~this()
@@ -132,13 +138,24 @@ final class Client
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         }
 
+        void send_raw(in char[][] line ...)
+        {
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+            foreach (part; line)
+            {
+                assert(part.length < 510);
+                assert(irc_socket.send(part) == part.length);
+            }
+            assert(irc_socket.send("\r\n") == 2);
+            debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+        }
+
         void process_line(in char[] line)
         {
             debug writeln(line);
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
 
-            auto index = 0; // TODO: is this the proper type?
-            //pragma(msg, typeof(index));
+            size_t index = 0;
             const(char)[] source;
             if (line[0] == ':')
             {
@@ -180,32 +197,12 @@ final class Client
               writeln();
               }*/
 
-            if (command == "PING")
-            {
-                send_raw("PONG :" ~ message);
-                debug writeln("sent pong");
-                if (!ready)
-                {
-                    ready = true;
-                    send_raw("JOIN :#fusxbottest"); // TODO: configureable channels
-                }
-                return;
-            }
-            if (command == "PRIVMSG" && message.length >= 2 && message[0] == COMMAND_CHAR)
-            {
-                if (Command* p = message[1..$] in commands)
-                {
-                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-                    (*p).f(this, source, message);
-                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-                }
-            }
-
-            if (Listener[]* p = command in listeners)
+            if (Listener*[]* p = command in listeners)
             {
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 foreach (f; *p)
-                    f.f(this, source, args, message);
+                    if (f.enabled)
+                        f.f(this, source, args, message);
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             }
         }
@@ -273,7 +270,7 @@ final class Client
                     //debug writeln();
                     //debug writeln();
                     //writeln(irc_socket.send(buf));
-                    debug if (irc_n == 333) break;
+                    //debug if (irc_n == 333) break;
                 }
                 if (!uds_connected && sockset.isSet(uds_server))
                 {
@@ -296,7 +293,7 @@ final class Client
                         writeln(uds_buf);
                         writeln();
 
-                        send_raw("PRIVMSG #fusxbottest :" ~ uds_buf[0..uds_n]);
+                        send_raw("PRIVMSG #fusxbottest :", uds_buf[0..uds_n]);
             
                         uds_buf[0..uds_n] = 0;
                     }

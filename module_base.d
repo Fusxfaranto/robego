@@ -1,20 +1,21 @@
 
 public import irc;
+public import util;
 
 struct Command
 {
     // TODO: implement permissions
-    void function(Client, in char[], in char[]) f;
+    void function(Client, in char[], in char[], in char[]) f;
 }
 
 struct Listener
 {
-    // TODO: implement disableability
     void function(Client, in char[], in char[][], in char[]) f;
+    bool enabled = true;
 }
 
 struct IRCModule
 {
-    Listener[string] listeners;
-    Command[string] commands;
+    Listener*[string] listeners;
+    Command*[string] commands;
 }

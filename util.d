@@ -5,19 +5,51 @@ import std.string : stripRight;
 import std.functional : binaryFun;
 
 
-const(inout(char[])[2]) split1(inout char[] s, in char delim) pure @safe
+const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
 {
-    foreach (ulong i, char c; s)
+    foreach (i, c; s)
     {
         if (c == delim)
         {
-            return [stripRight(s[0..i]), s[(i + 1)..$]];
+            //return [stripRight(s[0..i]), s[(i + 1)..$]];
+            return [s[0..i], s[(i + 1)..$]];
         }
     }
     //debug writeln("no delim");
-    return ["", s];
+    return [s, ""];
 }
 
+const(inout(char)[][n + 1]) splitN(int n)(inout(char)[] s, in char delim) pure nothrow if (n >= 1)
+{
+    size_t index = 0;
+    size_t last_i1 = 0;
+    inout(char)[][n + 1] o = void;
+    for (size_t i = 0; i < s.length; i++)
+    {
+        if (s[i] == delim)
+        {
+            o[index++] = s[last_i1..i];
+            last_i1 = i + 1;
+            if (index == n) break;
+        }
+    }
+    o[index++] = s[last_i1..$];
+    while (index <= n)
+        o[index++] = typeof(o[0]).init;
+    return o;
+}
+
+alias split1 = splitN!1;
+
+bool is_channel(in char[] s) pure nothrow @safe
+{
+    return s[0] == '#';
+}
+
+const(char[]) get_nick(in char[] s) pure nothrow @safe
+{
+    return split1(s, '!')[0];
+}
 
 /*T[S] aa_merge(T, S)(in T[S] a, in T[S] b, T function(T, T) pure callback) pure
   {
@@ -33,7 +65,7 @@ const(inout(char[])[2]) split1(inout char[] s, in char delim) pure @safe
   return c;
   }*/
 
-void aa_merge_inplace(T, S)(ref T[S] a, in T[S] b, T function(T, T) pure callback) pure
+void aa_merge_inplace(T, S)(ref T[S] a, ref T[S] b, T function(T, T) pure callback) pure
 {
     foreach (S s, T t; b)
     {
@@ -45,7 +77,7 @@ void aa_merge_inplace(T, S)(ref T[S] a, in T[S] b, T function(T, T) pure callbac
     }
 }
 
-void aa_merge_inplace(T, U, S)(ref T[S] a, in U[S] b, T function(T, U) pure callback, T sent) pure
+void aa_merge_inplace(T, U, S)(ref T[S] a, ref U[S] b, T function(T, U) pure callback, T sent) pure
 {
     foreach (S s, U u; b)
     {
@@ -59,50 +91,50 @@ void aa_merge_inplace(T, U, S)(ref T[S] a, in U[S] b, T function(T, U) pure call
 
 class SortedList(T, alias f) if(is(typeof(binaryFun!f(T.init, T.init)) == bool))
 {
-    private:
-        struct node
-        {
-            node* next;
-            T datum;
-        }
-        node* first = null;
-        alias pred = binaryFun!f;
+private:
+    struct node
+    {
+        node* next;
+        T datum;
+    }
+    node* first = null;
+    alias pred = binaryFun!f;
 
-    public:
-        bool has_items()
-        {
-            return cast(bool)first;
-        }
+public:
+    bool has_items()
+    {
+        return cast(bool)first;
+    }
 
-        T front()
-        {
-            assert(first);
-            return first.datum;
-        }
+    T front()
+    {
+        assert(first);
+        return first.datum;
+    }
 
-        void pop()
-        {
-            assert(first);
-            first = first.next;
-        }
+    void pop()
+    {
+        assert(first);
+        first = first.next;
+    }
 
-        void insert(T elem)
+    void insert(T elem)
+    {
+        if (first is null)
         {
-            if (first is null)
-            {
-                first = new node(null, elem);
-            }
-            else if (!pred(first.datum, elem))
-            {
-                first = new node(first, elem);
-            }
-            else
-            {
-                node* n = first;
-                for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
-                n.next = new node(n.next, elem);
-            }
+            first = new node(null, elem);
         }
+        else if (!pred(first.datum, elem))
+        {
+            first = new node(first, elem);
+        }
+        else
+        {
+            node* n = first;
+            for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
+            n.next = new node(n.next, elem);
+        }
+    }
 }
 
 unittest

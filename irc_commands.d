@@ -25,11 +25,11 @@ void check_dlerror(in string s)
 
 void*[] dlopen_ptrs = [];
 
-void unload_dynamics(ref Command[string] commands, ref Listener[][string] listeners)
+void unload_dynamics(ref Command*[string] commands, ref Listener*[][string] listeners)
 {
     debug writeln("unload_dynamics");
-    commands = (Command[string]).init;
-    listeners = Listener[][string].init;
+    commands = typeof(commands).init;
+    listeners = typeof(listeners).init;
     foreach (p; dlopen_ptrs)
     {
         debug writeln(p);
@@ -38,7 +38,7 @@ void unload_dynamics(ref Command[string] commands, ref Listener[][string] listen
     dlopen_ptrs = [];
 }
 
-void reload_dynamics(ref Command[string] commands, ref Listener[][string] listeners)
+void reload_dynamics(ref Command*[string] commands, ref Listener*[][string] listeners)
 {
     auto compilation_pid = spawnProcess(["make", "dynamic"]);
     if (wait(compilation_pid) != 0)
@@ -61,10 +61,10 @@ void reload_dynamics(ref Command[string] commands, ref Listener[][string] listen
         check_dlerror("importing from " ~ so_name);
         debug writeln(*m);
 
-        aa_merge_inplace!(Command, string)(commands, (*m).commands, (Command a, Command) => a);
+        aa_merge_inplace!(Command*, string)(commands, m.commands, (Command* a, Command*) => a);
 
-        aa_merge_inplace!(Listener[], Listener, string)(listeners, (*m).listeners,
-                                                        (Listener[] a, Listener b) => a ~ b, []);
+        aa_merge_inplace!(Listener*[], Listener*, string)(listeners, m.listeners,
+                                                        (Listener*[] a, Listener* b) => a ~ b, []);
 
         dlopen_ptrs ~= p;
     }
