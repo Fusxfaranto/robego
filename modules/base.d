@@ -3,7 +3,6 @@ import module_base;
 extern (C) IRCModule m;
 
 import std.stdio;
-import std.array : join;
 
 static this()
 {
@@ -11,7 +10,7 @@ static this()
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             writeln("reload command");
-            c.send_raw("PRIVMSG #fusxbottest :reload queued");
+            c.send_privmsg("#fusxbottest", "reload queued");
             c.delayed_actions.insert(new DelayedReload());
         });
 
@@ -29,6 +28,18 @@ static this()
             c.send_raw(message);
         });
 
+    m.commands["join"] = new Command(
+        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        {
+            c.send_join(message);
+        });
+
+    m.commands["part"] = new Command(
+        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        {
+            c.send_part(message);
+        });
+
     m.listeners["PING"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
@@ -37,7 +48,7 @@ static this()
             if (!c.ready)
             {
                 c.ready = true;
-                c.send_raw("JOIN :", c.initial_channels.join(','));
+                c.send_join(c.initial_channels);
             }
         });
 

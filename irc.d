@@ -5,7 +5,7 @@ import std.conv : to;
 import std.socket;
 import core.thread : sleep/*, dur*/;
 import std.file : exists, remove;
-import std.array : split, appender;
+import std.array : split, appender, join;
 //import std.container.dlist : DList;
 debug(prof) import std.datetime : StopWatch;
 
@@ -122,14 +122,6 @@ final class Client
             debug stdout.flush();
         }
 
-        void reload()
-        {
-            reload_dynamics(commands, listeners);
-            debug writeln(commands);
-            debug writeln(listeners);
-            debug if (ready) send_raw("PRIVMSG #fusxbottest :reloaded");
-        }
-
         void send_raw(in char[] line)
         {
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
@@ -148,6 +140,14 @@ final class Client
             }
             assert(irc_socket.send("\r\n") == 2);
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+        }
+
+        void reload()
+        {
+            reload_dynamics(commands, listeners);
+            debug writeln(commands);
+            debug writeln(listeners);
+            debug if (ready) send_raw("PRIVMSG #fusxbottest :reloaded");
         }
 
         void process_line(in char[] line)
@@ -348,4 +348,31 @@ final class Client
                 debug stdout.flush();
             }
         }
+}
+
+
+void send_privmsg(Client c, in char[] channel, in char[] message)
+{
+    c.send_raw("PRIVMSG ", channel, " :", message);
+}
+
+void send_privmsg(Client c, in char[] channel, in char[][] message_parts ...)
+{
+    c.send_raw("PRIVMSG ", channel, " :", message_parts.join());
+}
+
+void send_join(Client c, in char[] channel)
+{
+    c.send_raw("JOIN :", channel);
+}
+
+void send_join(Client c, in char[][] channels)
+{
+    c.send_raw("JOIN :", channels.join(','));
+}
+
+void send_part(Client c, in char[] channel)
+{
+    c.send_raw("PART :", channel);
+    //c.channels.remove(channel.idup);
 }

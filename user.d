@@ -11,6 +11,7 @@ enum channel_auth_t[char] auth_chars =
 struct GlobalUser
 {
     string cased_name;
+    byte ns_status = -1;
     ubyte auth_level = 0;
 }
 
@@ -18,7 +19,7 @@ struct LocalUser
 {
     GlobalUser* global_reference;
     channel_auth_t channel_auth_level = channel_auth_t.NONE;
-    ubyte auth_level = 0;
+    ubyte local_auth_level = 0;
 }
 
 struct Channel

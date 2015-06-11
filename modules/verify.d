@@ -6,6 +6,7 @@ import std.stdio;
 import std.uni : toLower;
 import std.format : format;
 import std.array : split;
+import std.algorithm : map;
 
 static this()
 {
@@ -14,39 +15,87 @@ static this()
         {
             c.users = typeof(c.users).init;
             c.channels = typeof(c.channels).init;
+            c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
         });
+
+    m.listeners["319"] = new Listener( // WHOIS channels reply
+        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        {
+            // currently we're only ever WHOISing ourself, so let's make sure that's the case here
+            assert(args[0] == args[1] && args[0] == c.nick);
+            foreach (chan_name; message.split(' '))
+            {
+                c.send_raw("NAMES ", chan_name);
+            }
+        });
+
+    static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)
+    {
+        Channel[] o;
+        foreach (channel; channels.byValue())
+        {
+            if (lowered_nick in channel.users)
+                o ~= channel;
+        }
+        return o;
+    }
 
     m.commands["userstate"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            if (format("%s", c.channels).length < 300)
+            if (message.length)
             {
-                c.send_raw("PRIVMSG ", channel, " ", format("%s", c.users));
-                c.send_raw("PRIVMSG ", channel, " ", format("%s", c.channels));
+                string lowered_nick = message.toLower().idup;
+                if (auto u = lowered_nick in c.users)
+                {
+                    c.send_privmsg(channel, format("%s", *u));
+                    c.send_privmsg(channel,
+                                   channels_with_user(c.channels, lowered_nick)
+                                   .map!(a => a.cased_name)
+                                   .join(", "));
+                }
             }
-            writeln(c.users);
-            writeln(c.channels);
+            else
+            {
+                if (format("%s", c.channels).length < 450 &&
+                    format("%s", c.users).length < 450)
+                {
+                    c.send_privmsg(channel, format("%s", c.users));
+                    c.send_privmsg(channel, format("%s", c.channels));
+                }
+                writeln(c.users);
+                writeln(c.channels);
+            }
         });
 
     m.commands["verify"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            c.send_raw("PRIVMSG NickServ :STATUS ", message);
+            if (m.listeners["NOTICE"].enabled)
+            {
+                c.send_privmsg(channel, "error: still waiting on nickserv response from prior request");
+                return;
+            }
+            m.listeners["NOTICE"].enabled = true;
+            c.send_privmsg("NickServ", "STATUS ", message);
         });
 
     m.listeners["NOTICE"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
-            if (source.get_nick() == "Fusxfaranto")
+            assert(m.listeners["NOTICE"].enabled);
+            if (source.get_nick() == "NickServ")
             {
                 auto s = message.splitN!2(' ');
                 writeln(s);
                 if (s[0] == "STATUS")
                 {
-
+                    if (auto u = s[1].toLower().idup in c.users)
+                        u.ns_status = to!byte(s[2]);
+                    m.listeners["NOTICE"].enabled = false;
                 }
             }
-        }, true);
+        }, false);
 
     static void register_user(bool has_symbol = false)(Client c, string nick_in, string chan_name)
     {
@@ -109,13 +158,21 @@ static this()
     m.listeners["PART"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
+            const(char)[] nick = source.get_nick();
             string lowered_chan_name = args.length == 1 ? args[0].toLower().idup : message.toLower().idup;
-            assert(lowered_chan_name in c.channels, format("%s", c.users) ~ "\n\n" ~ format("%s", c.channels));
+            assert(lowered_chan_name in c.channels,
+                   format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
+            if (nick == c.nick)
+            {
+                c.channels.remove(lowered_chan_name);
+                return;
+            }
 
-            string lowered_nick = source.get_nick().toLower().idup;
+            string lowered_nick = nick.toLower().idup;
             assert(lowered_nick in c.channels[lowered_chan_name].users,
-                   format("%s", c.users) ~ "\n\n" ~ format("%s", c.channels));
+                   format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.channels[lowered_chan_name].users.remove(lowered_nick);
+            c.users[lowered_nick].ns_status = -1;
         });
 
     m.listeners["QUIT"] = new Listener(
@@ -127,7 +184,7 @@ static this()
                 channel.users.remove(lowered_nick);
             }
 
-            assert(lowered_nick in c.users, format("%s", c.users) ~ "\n\n" ~ format("%s", c.channels));
+            assert(lowered_nick in c.users, format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.users.remove(lowered_nick);
         });
 
@@ -137,8 +194,8 @@ static this()
             string lowered_old_nick = source.get_nick().toLower().idup;
             string lowered_new_nick = message.toLower().idup;
 
-            c.users[lowered_new_nick] = GlobalUser(message.idup, c.users[lowered_old_nick].auth_level);
-            assert(lowered_old_nick in c.users, format("%s", c.users) ~ "\n\n" ~ format("%s", c.channels));
+            c.users[lowered_new_nick] = GlobalUser(message.idup, -1, c.users[lowered_old_nick].auth_level);
+            assert(lowered_old_nick in c.users, format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.users.remove(lowered_old_nick);
 
             foreach (channel; c.channels)
@@ -146,7 +203,8 @@ static this()
                 if (auto user_p = lowered_old_nick in channel.users)
                 {
                     channel.users[lowered_new_nick] =
-                        LocalUser(&c.users[lowered_new_nick], user_p.channel_auth_level, user_p.auth_level);
+                        LocalUser(&c.users[lowered_new_nick], user_p.channel_auth_level,
+                                  user_p.local_auth_level);
                     channel.users.remove(lowered_old_nick);
                 }
             }
