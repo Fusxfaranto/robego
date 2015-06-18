@@ -6,6 +6,7 @@ import std.socket;
 import core.thread : sleep/*, dur*/;
 import std.file : exists, remove;
 import std.array : split, appender, join;
+import std.algorithm : remove;
 //import std.container.dlist : DList;
 debug(prof) import std.datetime : StopWatch;
 
@@ -42,10 +43,12 @@ final class Client
         GlobalUser[string] users;
         Channel[string] channels;
 
-        auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
-
         Command*[string] commands;
         Listener*[][string] listeners;
+
+        auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
+
+        TemporaryListener[] temporary_listeners;
         
         bool ready = false;
         bool uds_connected = false;
@@ -204,6 +207,17 @@ final class Client
                     if (f.enabled)
                         f.f(this, source, args, message);
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+            }
+
+            // TODO: if (temporary_listeners.length) {} faster??
+            for (size_t i = 0; i < temporary_listeners.length; i++)
+            {
+                if (temporary_listeners[i].action(source, command, args, message))
+                {
+                    // TODO: something more efficient
+                    temporary_listeners = temporary_listeners.remove(i);
+                    i--;
+                }
             }
         }
 

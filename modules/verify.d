@@ -16,17 +16,21 @@ static this()
             c.users = typeof(c.users).init;
             c.channels = typeof(c.channels).init;
             c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
-        });
-
-    m.listeners["319"] = new Listener( // WHOIS channels reply
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
-        {
-            // currently we're only ever WHOISing ourself, so let's make sure that's the case here
-            assert(args[0] == args[1] && args[0] == c.nick);
-            foreach (chan_name; message.split(' '))
-            {
-                c.send_raw("NAMES ", chan_name);
-            }
+            c.temporary_listeners ~= TemporaryListener(
+                delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
+                {
+                    if (command == "319" // WHOIS channels reply
+                        && args[0] == c.nick
+                        && args[0] == args[1])
+                    {
+                        foreach (chan_name; message.split(' '))
+                        {
+                            c.send_raw("NAMES ", chan_name);
+                        }
+                        return true;
+                    }
+                    return false;
+                });
         });
 
     static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)
@@ -71,31 +75,25 @@ static this()
     m.commands["verify"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            if (m.listeners["NOTICE"].enabled)
-            {
-                c.send_privmsg(channel, "error: still waiting on nickserv response from prior request");
-                return;
-            }
-            m.listeners["NOTICE"].enabled = true;
             c.send_privmsg("NickServ", "STATUS ", message);
-        });
-
-    m.listeners["NOTICE"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
-        {
-            assert(m.listeners["NOTICE"].enabled);
-            if (source.get_nick() == "NickServ")
-            {
-                auto s = message.splitN!2(' ');
-                writeln(s);
-                if (s[0] == "STATUS")
+            string nick = message.toLower().idup;
+            c.temporary_listeners ~= TemporaryListener(
+                delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
                 {
-                    if (auto u = s[1].toLower().idup in c.users)
-                        u.ns_status = to!byte(s[2]);
-                    m.listeners["NOTICE"].enabled = false;
-                }
-            }
-        }, false);
+                    if (command == "NOTICE" && source.get_nick() == "NickServ")
+                    {
+                        auto s = message.splitN!2(' ');
+                        debug writeln(s);
+                        if (s[0] == "STATUS" && s[1].toLower() == nick)
+                        {
+                            if (auto u = nick in c.users)
+                                u.ns_status = to!byte(s[2]);
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+        });
 
     static void register_user(bool has_symbol = false)(Client c, string nick_in, string chan_name)
     {
@@ -155,6 +153,8 @@ static this()
             //writeln(c.channels);
         });
 
+    // TODO: KICK listener
+
     m.listeners["PART"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
@@ -192,10 +192,17 @@ static this()
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
             string lowered_old_nick = source.get_nick().toLower().idup;
-            string lowered_new_nick = message.toLower().idup;
+            string new_nick = message.idup;
+            const(char)[] lowered_new_nick = new_nick.toLower();
+            assert(lowered_old_nick in c.users, format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
+
+            if (lowered_old_nick == lowered_new_nick)
+            {
+                c.users[lowered_new_nick].cased_name = new_nick;
+                return;
+            }
 
             c.users[lowered_new_nick] = GlobalUser(message.idup, -1, c.users[lowered_old_nick].auth_level);
-            assert(lowered_old_nick in c.users, format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.users.remove(lowered_old_nick);
 
             foreach (channel; c.channels)

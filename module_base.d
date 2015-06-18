@@ -19,3 +19,15 @@ struct IRCModule
     Listener*[string] listeners;
     Command*[string] commands;
 }
+
+/*
+            c.temporary_listeners ~= TemporaryListener(
+                delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
+                {
+                    return
+                },
+                delegate void(in char[] source, in char[] command, in char[][] args, in char[] message)
+                {
+
+                });
+*/

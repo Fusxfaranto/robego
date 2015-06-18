@@ -44,3 +44,9 @@ class DelayedCallback : DelayedAction
             cb = c;
         }
 }
+
+
+struct TemporaryListener
+{
+    bool delegate(in char[] source, in char[] command, in char[][] args, in char[] message) action;
+}
