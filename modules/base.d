@@ -24,7 +24,6 @@ static this()
     m.commands["raw"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            writeln(message);
             c.send_raw(message);
         });
 
@@ -69,4 +68,6 @@ static this()
                 }
             }
         });
+
+    // TODO: eval function (via dynamic loading, maybe should be its own file)
 }
