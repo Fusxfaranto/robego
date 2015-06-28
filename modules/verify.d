@@ -31,7 +31,7 @@ static this()
                     }
                     return false;
                 });
-        });
+        }, 3, channel_auth_t.NONE, 240);
 
     static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)
     {
@@ -70,9 +70,9 @@ static this()
                 writeln(c.users);
                 writeln(c.channels);
             }
-        });
+        }, 3, channel_auth_t.NONE, 240);
 
-    m.commands["verify"] = new Command(
+/*    m.commands["verify"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_privmsg("NickServ", "STATUS ", message);
@@ -93,7 +93,7 @@ static this()
                     }
                     return false;
                 });
-        });
+        });*/
 
     static void register_user(bool has_symbol = false)(Client c, string nick_in, string chan_name)
     {
@@ -153,7 +153,11 @@ static this()
             //writeln(c.channels);
         });
 
-    // TODO: KICK listener
+    m.listeners["KICK"] = new Listener(
+        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        {
+            m.listeners["PART"].f(c, args[1], [], args[0]);
+        });
 
     m.listeners["PART"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
@@ -210,8 +214,7 @@ static this()
                 if (auto user_p = lowered_old_nick in channel.users)
                 {
                     channel.users[lowered_new_nick] =
-                        LocalUser(&c.users[lowered_new_nick], user_p.channel_auth_level,
-                                  user_p.local_auth_level);
+                        LocalUser(&c.users[lowered_new_nick], user_p.channel_auth_level);
                     channel.users.remove(lowered_old_nick);
                 }
             }

@@ -12,11 +12,11 @@ import irc_commands;
 
 static this()
 {
-    m.commands["eval"] = new Command(
+    m.commands["exec"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             write("module_files/eval/temp.d",
-                  "import module_base; "
+                  "import module_base; import std.stdio;"
                   "extern (C) void f(in char[] message, in char[] channel, in char[] source, Client c) "
                   "{"
                   // "Client c = *(cast(Client*)0x" ~ to!string(&c) ~ ");"
@@ -48,5 +48,13 @@ static this()
             writeln(source);
             writeln(channel);
             writeln(message);
-        });
+        }, 3, channel_auth_t.NONE, 255);
+
+    m.commands["eval"] = new Command(
+        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        {
+            m.commands["exec"].f(c, source, channel,
+                                 "import std.format : format;"
+                                 "c.send_privmsg(channel,format(\"%s\"," ~ message ~ "));");
+        }, 3, channel_auth_t.NONE, 255);
 }

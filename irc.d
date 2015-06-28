@@ -204,8 +204,7 @@ final class Client
             {
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
                 foreach (f; *p)
-                    if (f.enabled)
-                        f.f(this, source, args, message);
+                    f.f(this, source, args, message);
                 debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             }
 

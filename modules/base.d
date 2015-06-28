@@ -2,42 +2,43 @@
 import module_base;
 extern (C) IRCModule m;
 
-import std.stdio;
+debug import std.stdio;
+import std.uni : toLower;
 
 static this()
 {
     m.commands["reload"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            writeln("reload command");
+            debug writeln("reload command");
             c.send_privmsg("#fusxbottest", "reload queued");
             c.delayed_actions.insert(new DelayedReload());
-        });
+        }, 3, channel_auth_t.NONE, 250);
 
     m.commands["quit"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_raw("QUIT :quitting from command");
             c.delayed_actions.insert(new DelayedQuit());
-        });
+        }, 3, channel_auth_t.NONE, 240);
 
     m.commands["raw"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_raw(message);
-        });
+        }, 3, channel_auth_t.NONE, 250);
 
     m.commands["join"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_join(message);
-        });
+        }, 3, channel_auth_t.NONE, 240);
 
     m.commands["part"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_part(message);
-        });
+        }, 3, channel_auth_t.NONE, 240);
 
     m.listeners["PING"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
@@ -56,18 +57,76 @@ static this()
         {
             if (message.length >= 2 && message[0] == COMMAND_CHAR)
             {
-                const(char)[][2] m = split1(message[1..$], ' ');
-                if (Command** p = m[0] in c.commands)
+                const(char)[][2] msg = split1(message[1..$], ' ');
+                if (Command** p = msg[0] in c.commands)
                 {
-                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-                    if (args[0].is_channel())
-                        (*p).f(c, source, args[0], m[1]);
+                    Command* cmd = *p;
+                    const(char)[] nick = source.get_nick();
+                    string lowered_nick = nick.toLower().idup;
+                    bool in_channel = args[0].is_channel();
+
+                    Channel* channel;
+                    LocalUser* user;
+                    GlobalUser* guser;
+                    if (in_channel)
+                    {
+                        channel = args[0].toLower() in c.channels;
+                        assert(channel);
+                        user = lowered_nick in channel.users;
+                        assert(user);
+                        guser = user.global_reference;
+                        assert(guser == (lowered_nick in c.users));
+                    }
                     else
-                        (*p).f(c, source, source.get_nick(), m[1]);
-                    debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
+                    {
+                        guser = lowered_nick in c.users;
+                        assert(guser);
+                    }
+
+                    if (in_channel && user.channel_auth_level < cmd.min_channel_auth_level)
+                        c.send_privmsg(args[0], "Error - your channel auth level "
+                                       "is too low to use this command.");
+                    else if (guser.auth_level < cmd.min_auth_level)
+                        c.send_privmsg(args[0], "Error - you are not allowed to use this command.");
+                    else if (guser.ns_status < cmd.min_ns_status)
+                    {
+                        if (guser.ns_status == -1)
+                        {
+                            alias source_ = source;
+                            alias args_ = args;
+                            alias message_ = message;
+                            c.send_privmsg("NickServ", "STATUS ", nick);
+                            c.temporary_listeners ~= TemporaryListener(
+                                delegate bool(in char[] source, in char[] command,
+                                              in char[][] args, in char[] message)
+                                {
+                                    if (command == "NOTICE" && source.get_nick() == "NickServ")
+                                    {
+                                        auto s = message.splitN!2(' ');
+                                        if (s[0] == "STATUS" && s[1].toLower() == lowered_nick)
+                                        {
+                                            auto u = lowered_nick in c.users;
+                                            assert(u == guser);
+                                            u.ns_status = to!byte(s[2]);
+                                            assert(guser.ns_status != -1);
+                                            m.listeners["PRIVMSG"].f(c, source_, args_, message_);
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                });
+                        }
+                        else
+                            c.send_privmsg(args[0], "Error - you must be identified to use this command.");
+                    }
+                    else
+                    {
+                        if (in_channel)
+                            cmd.f(c, source, args[0], msg[1]);
+                        else
+                            cmd.f(c, source, nick, msg[1]);
+                    }
                 }
             }
         });
-
-    // TODO: eval function (via dynamic loading, maybe should be its own file)
 }
