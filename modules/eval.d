@@ -48,7 +48,7 @@ static this()
             writeln(source);
             writeln(channel);
             writeln(message);
-        }, 3, channel_auth_t.NONE, 255);
+        }, 3, UserChannelFlag.NONE, 255);
 
     m.commands["eval"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
@@ -56,5 +56,5 @@ static this()
             m.commands["exec"].f(c, source, channel,
                                  "import std.format : format;"
                                  "c.send_privmsg(channel,format(\"%s\"," ~ message ~ "));");
-        }, 3, channel_auth_t.NONE, 255);
+        }, 3, UserChannelFlag.NONE, 255);
 }

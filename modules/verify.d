@@ -8,11 +8,16 @@ import std.format : format;
 import std.array : split;
 import std.algorithm : map;
 
+GlobalUser[string] old_users = null;
+Channel[string] old_channels = null;
+
 static this()
 {
     m.commands["resync"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
+            old_users = c.users.dup;
+            old_channels = c.channels.dup;
             c.users = typeof(c.users).init;
             c.channels = typeof(c.channels).init;
             c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
@@ -31,7 +36,22 @@ static this()
                     }
                     return false;
                 });
-        }, 3, channel_auth_t.NONE, 240);
+        }, 3, UserChannelFlag.NONE, 240);
+
+    m.commands["compareold"] = new Command(
+        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        {
+            alias users_diff = aa_diff!(deep_compare!GlobalUser, GlobalUser[string]);
+            alias channel_diff = aa_diff!(deep_compare!Channel, Channel[string]);
+            c.send_privmsg(channel, "diff from old users: ",
+                           format("%s", users_diff(c.users, old_users)));
+            c.send_privmsg(channel, "diff from new users: ",
+                           format("%s", users_diff(old_users, c.users)));
+            c.send_privmsg(channel, "diff from old channels: ",
+                           format("%s", channel_diff(c.channels, old_channels)));
+            c.send_privmsg(channel, "diff from new channels: ",
+                           format("%s", channel_diff(old_channels, c.channels)));
+        }, 3, UserChannelFlag.NONE, 240);
 
     static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)
     {
@@ -70,47 +90,43 @@ static this()
                 writeln(c.users);
                 writeln(c.channels);
             }
-        }, 3, channel_auth_t.NONE, 240);
+        }, 3, UserChannelFlag.NONE, 240);
 
 /*    m.commands["verify"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
-        {
-            c.send_privmsg("NickServ", "STATUS ", message);
-            string nick = message.toLower().idup;
-            c.temporary_listeners ~= TemporaryListener(
-                delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
-                {
-                    if (command == "NOTICE" && source.get_nick() == "NickServ")
-                    {
-                        auto s = message.splitN!2(' ');
-                        debug writeln(s);
-                        if (s[0] == "STATUS" && s[1].toLower() == nick)
-                        {
-                            if (auto u = nick in c.users)
-                                u.ns_status = to!byte(s[2]);
-                            return true;
-                        }
-                    }
-                    return false;
-                });
-        });*/
+      function void(Client c, in char[] source, in char[] channel, in char[] message)
+      {
+      c.send_privmsg("NickServ", "STATUS ", message);
+      string nick = message.toLower().idup;
+      c.temporary_listeners ~= TemporaryListener(
+      delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
+      {
+      if (command == "NOTICE" && source.get_nick() == "NickServ")
+      {
+      auto s = message.splitN!2(' ');
+      debug writeln(s);
+      if (s[0] == "STATUS" && s[1].toLower() == nick)
+      {
+      if (auto u = nick in c.users)
+      u.ns_status = to!byte(s[2]);
+      return true;
+      }
+      }
+      return false;
+      });
+      });*/
 
-    static void register_user(bool has_symbol = false)(Client c, string nick_in, string chan_name)
+    static void register_user(bool has_symbols = false)(Client c, string nick_in, string chan_name)
     {
-        static if (has_symbol)
+        static if (has_symbols)
         {
-            string nick;
-            channel_auth_t* auth_level_p = nick_in[0] in auth_chars;
-            channel_auth_t auth_level;
-            if (auth_level_p)
+            string nick = nick_in;
+            UserChannelFlag* auth_level_p = nick[0] in auth_chars;
+            UserChannelFlagSet auth_level = UserChannelFlag.NONE;
+            while (auth_level_p)
             {
-                nick = nick_in[1..$];
-                auth_level = *auth_level_p;
-            }
-            else
-            {
-                nick = nick_in;
-                auth_level = channel_auth_t.NONE;
+                nick = nick[1..$];
+                auth_level |= *auth_level_p;
+                auth_level_p = nick[0] in auth_chars;
             }
         }
         else
@@ -128,7 +144,7 @@ static this()
         if (!chan)
             chan = &(c.channels[lowered_chan_name] = Channel(chan_name));
         //assert(!(lowered_nick in chan.users));
-        static if (has_symbol) chan.users[lowered_nick] = LocalUser(global, auth_level);
+        static if (has_symbols) chan.users[lowered_nick] = LocalUser(global, auth_level);
         else chan.users[lowered_nick] = LocalUser(global);
     }
 
@@ -214,9 +230,79 @@ static this()
                 if (auto user_p = lowered_old_nick in channel.users)
                 {
                     channel.users[lowered_new_nick] =
-                        LocalUser(&c.users[lowered_new_nick], user_p.channel_auth_level);
+                        LocalUser(&c.users[lowered_new_nick], user_p.user_channel_flags);
                     channel.users.remove(lowered_old_nick);
                 }
+            }
+        });
+
+    enum UserChannelFlag[char] mode_chars =
+        ['v': UserChannelFlag.VOICE,
+         'h': UserChannelFlag.HOP,
+         'o': UserChannelFlag.OP,
+         'a': UserChannelFlag.ADMIN,
+         'q': UserChannelFlag.OWNER];
+
+    m.listeners["MODE"] = new Listener(
+        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        {
+            //string lowered_nick = source.get_nick().toLower().idup;
+            c.send_privmsg("#fusxbottest", "MODE " ~ args.join(' '));
+
+            if (args[0].is_channel())
+            {
+                Channel* channel = args[0].toLower().idup in c.channels;
+                assert(channel);
+
+                const(char[])[] mode_args = void;
+                if (args.length >= 3) mode_args = args[2..$];
+                else mode_args = null;
+
+                bool currently_adding;
+                assert(args[1][0] == '+' || args[1][0] == '-');
+                foreach (char chr; args[1])
+                {
+                    switch (chr)
+                    {
+                        case '+':
+                            currently_adding = true;
+                            break;
+
+                        case '-':
+                            currently_adding = false;
+                            break;
+
+                        case 'v': case 'h': case 'o': case 'a': case 'q':
+                            assert(mode_args);
+                            LocalUser* user = mode_args[0].toLower().idup in channel.users;
+                            assert(user);
+
+                            if (currently_adding)
+                            {
+                                assert(!(mode_chars[chr] & user.user_channel_flags));
+                                user.user_channel_flags |= mode_chars[chr];
+                            }
+                            else
+                            {
+                                assert(mode_chars[chr] & user.user_channel_flags);
+                                user.user_channel_flags ^= mode_chars[chr];
+                            }
+
+                            if (mode_args.length > 1) mode_args = mode_args[1..$];
+                            else mode_args = null;
+                            break;
+
+                        case 'b': case 'e': case 'I':
+                            if (mode_args.length > 1) mode_args = mode_args[1..$];
+                            else mode_args = null;
+                            break;
+
+                        default:
+                            break;
+                    }
+                }
+
+                assert(!mode_args);
             }
         });
 }

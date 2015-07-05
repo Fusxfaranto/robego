@@ -6,7 +6,7 @@ struct Command
 {
     void function(Client, in char[], in char[], in char[]) f;
     byte min_ns_status = -1;
-    channel_auth_t min_channel_auth_level = channel_auth_t.NONE;
+    UserChannelFlag min_channel_auth_level = UserChannelFlag.NONE;
     ubyte min_auth_level = 50;
 }
 

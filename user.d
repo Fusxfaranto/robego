@@ -1,12 +1,15 @@
 
-enum channel_auth_t {NONE, VOICE, HOP, OP, ADMIN, OWNER}
+enum UserChannelFlag : uint {NONE = 0x0, VOICE = 0x1, HOP = 0x2, OP = 0x4, ADMIN = 0x8, OWNER = 0x10}
 
-enum channel_auth_t[char] auth_chars =
-    ['+': channel_auth_t.VOICE,
-     '%': channel_auth_t.HOP,
-     '@': channel_auth_t.OP,
-     '&': channel_auth_t.ADMIN,
-     '~': channel_auth_t.OWNER];
+enum UserChannelFlag[char] auth_chars =
+    ['+': UserChannelFlag.VOICE,
+     '%': UserChannelFlag.HOP,
+     '@': UserChannelFlag.OP,
+     '&': UserChannelFlag.ADMIN,
+     '~': UserChannelFlag.OWNER];
+
+import std.traits : OriginalType;
+alias UserChannelFlagSet = OriginalType!UserChannelFlag;
 
 struct GlobalUser
 {
@@ -18,7 +21,7 @@ struct GlobalUser
 struct LocalUser
 {
     GlobalUser* global_reference;
-    channel_auth_t channel_auth_level = channel_auth_t.NONE;
+    UserChannelFlagSet user_channel_flags = UserChannelFlag.NONE;
 }
 
 struct Channel

@@ -18,13 +18,13 @@ static this()
             c.send_raw("PRIVMSG #fusxbottest :", channel, ": <", source, "> ", message/*, " poop"*/);
             c.delayed_actions.insert(new DelayedCallback({writeln("lazy");}));
             c.delayed_actions.insert(new DelayedCallback({c.send_raw("PRIVMSG #fusxbottest :lazy");}, 4000));
-        }, -1, channel_auth_t.NONE, 0);
+        }, -1, UserChannelFlag.NONE, 0);
 
     m.commands["adminme"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.users["fusxfaranto"].auth_level = 255;
-        }, -1, channel_auth_t.NONE, 0);
+        }, -1, UserChannelFlag.NONE, 0);
 
     // m.listeners["PRIVMSG"] = new Listener(
     //     function void(Client c, in char[] source, in char[][] args, in char[] message)

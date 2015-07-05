@@ -3,6 +3,8 @@
 import std.stdio : writeln;
 import std.string : stripRight;
 import std.functional : binaryFun;
+import std.traits : isPointer, isAssociativeArray, ValueType, KeyType /*, hasMember*/;
+import std.typetuple : TypeTuple;
 
 
 const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
@@ -152,5 +154,56 @@ unittest
     {
         assert(x == l.front);
         l.pop();
+    }
+}
+
+
+T aa_diff(alias f, T : U[V], U, V)(T a, T b)
+    if(is(typeof(binaryFun!f(ValueType!T.init, ValueType!T.init)) == bool))
+{
+    alias pred = binaryFun!f;
+    T o;
+    foreach (V key, U value; a)
+    {
+        if (auto p = key in b)
+        {
+            if (!pred(*p, value))
+                o[key] = value;
+        }
+        else
+            o[key] = value;
+    }
+    return o;
+}
+
+bool deep_compare(T)(T a, T b)
+{
+    // this ought to use hasMember!(T, "tupleof"),
+    // but for some reason (compiler bug?) that's evaluating as false on structs
+    static if (__traits(compiles, a.tupleof))
+    {
+        foreach(i, _; a.tupleof)
+        {
+            if (!deep_compare(a.tupleof[i], b.tupleof[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    else
+    {
+        static if (isPointer!T)
+        {
+            return deep_compare(*a, *b);
+        }
+        else static if (isAssociativeArray!T)
+        {
+            return aa_diff!(deep_compare!(ValueType!T), T)(a, b).length == 0;
+        }
+        else
+        {
+            return a == b;
+        }
     }
 }

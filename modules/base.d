@@ -13,32 +13,32 @@ static this()
             debug writeln("reload command");
             c.send_privmsg("#fusxbottest", "reload queued");
             c.delayed_actions.insert(new DelayedReload());
-        }, 3, channel_auth_t.NONE, 250);
+        }, 3, UserChannelFlag.NONE, 250);
 
     m.commands["quit"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_raw("QUIT :quitting from command");
             c.delayed_actions.insert(new DelayedQuit());
-        }, 3, channel_auth_t.NONE, 240);
+        }, 3, UserChannelFlag.NONE, 240);
 
     m.commands["raw"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_raw(message);
-        }, 3, channel_auth_t.NONE, 250);
+        }, 3, UserChannelFlag.NONE, 250);
 
     m.commands["join"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_join(message);
-        }, 3, channel_auth_t.NONE, 240);
+        }, 3, UserChannelFlag.NONE, 240);
 
     m.commands["part"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             c.send_part(message);
-        }, 3, channel_auth_t.NONE, 240);
+        }, 3, UserChannelFlag.NONE, 240);
 
     m.listeners["PING"] = new Listener(
         function void(Client c, in char[] source, in char[][] args, in char[] message)
@@ -48,6 +48,7 @@ static this()
             if (!c.ready)
             {
                 c.ready = true;
+                c.send_raw("CAP REQ multi-prefix"); // TODO: check for CAP ACK response
                 c.send_join(c.initial_channels);
             }
         });
@@ -80,10 +81,10 @@ static this()
                     else
                     {
                         guser = lowered_nick in c.users;
-                        assert(guser);
+                        assert(guser); // TODO: fix this, will crash if no channels are shared
                     }
 
-                    if (in_channel && user.channel_auth_level < cmd.min_channel_auth_level)
+                    if (in_channel && user.user_channel_flags < cmd.min_channel_auth_level)
                         c.send_privmsg(args[0], "Error - your channel auth level "
                                        "is too low to use this command.");
                     else if (guser.auth_level < cmd.min_auth_level)
