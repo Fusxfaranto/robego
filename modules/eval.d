@@ -45,9 +45,9 @@ static this()
             c.send_privmsg(channel, "done evaling");
             dlclose(p);
 
-            writeln(source);
-            writeln(channel);
-            writeln(message);
+            //writeln(source);
+            //writeln(channel);
+            //writeln(message);
         }, 3, UserChannelFlag.NONE, 255);
 
     m.commands["eval"] = new Command(

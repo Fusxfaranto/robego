@@ -3,8 +3,9 @@
 import std.stdio : writeln;
 import std.string : stripRight;
 import std.functional : binaryFun;
-import std.traits : isPointer, isAssociativeArray, ValueType, KeyType /*, hasMember*/;
-import std.typetuple : TypeTuple;
+import std.traits : isInstanceOf, FieldNameTuple, isPointer, isAssociativeArray,
+    ValueType, KeyType /*, hasMember*/;
+import std.typetuple : allSatisfy;
 
 
 const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
@@ -93,50 +94,50 @@ void aa_merge_inplace(T, U, S)(ref T[S] a, ref U[S] b, T function(T, U) pure cal
 
 class SortedList(T, alias f) if(is(typeof(binaryFun!f(T.init, T.init)) == bool))
 {
-private:
-    struct node
-    {
-        node* next;
-        T datum;
-    }
-    node* first = null;
-    alias pred = binaryFun!f;
-
-public:
-    bool has_items()
-    {
-        return cast(bool)first;
-    }
-
-    T front()
-    {
-        assert(first);
-        return first.datum;
-    }
-
-    void pop()
-    {
-        assert(first);
-        first = first.next;
-    }
-
-    void insert(T elem)
-    {
-        if (first is null)
+    private:
+        struct node
         {
-            first = new node(null, elem);
+            node* next;
+            T datum;
         }
-        else if (!pred(first.datum, elem))
+        node* first = null;
+        alias pred = binaryFun!f;
+
+    public:
+        bool has_items()
         {
-            first = new node(first, elem);
+            return cast(bool)first;
         }
-        else
+
+        T front()
         {
-            node* n = first;
-            for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
-            n.next = new node(n.next, elem);
+            assert(first);
+            return first.datum;
         }
-    }
+
+        void pop()
+        {
+            assert(first);
+            first = first.next;
+        }
+
+        void insert(T elem)
+        {
+            if (first is null)
+            {
+                first = new node(null, elem);
+            }
+            else if (!pred(first.datum, elem))
+            {
+                first = new node(first, elem);
+            }
+            else
+            {
+                node* n = first;
+                for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
+                n.next = new node(n.next, elem);
+            }
+        }
 }
 
 unittest
@@ -160,21 +161,21 @@ unittest
 
 T aa_diff(alias f, T : U[V], U, V)(T a, T b)
     if(is(typeof(binaryFun!f(ValueType!T.init, ValueType!T.init)) == bool))
-{
-    alias pred = binaryFun!f;
-    T o;
-    foreach (V key, U value; a)
     {
-        if (auto p = key in b)
+        alias pred = binaryFun!f;
+        T o;
+        foreach (V key, U value; a)
         {
-            if (!pred(*p, value))
+            if (auto p = key in b)
+            {
+                if (!pred(*p, value))
+                    o[key] = value;
+            }
+            else
                 o[key] = value;
         }
-        else
-            o[key] = value;
+        return o;
     }
-    return o;
-}
 
 bool deep_compare(T)(T a, T b)
 {
@@ -205,5 +206,58 @@ bool deep_compare(T)(T a, T b)
         {
             return a == b;
         }
+    }
+}
+
+template Tuple(T...)
+{
+    alias Tuple = T;
+}
+
+template InTuple(alias Element)
+{
+    enum bool InTuple = false;
+}
+
+template InTuple(alias Element, alias T)
+{
+    enum bool InTuple = T == Element;
+}
+
+template InTuple(alias Element, alias T, Ts...)
+{
+    enum bool InTuple = T == Element || InTuple!(Element, Ts);
+}
+
+template StaticMap(alias Template, alias T)
+{
+    alias StaticMap = Template!T;
+}
+
+template StaticMap(alias Template, alias T, Ts...)
+{
+    alias StaticMap = Tuple!(Template!T, StaticMap!(Template, Ts));
+}
+
+template KWArg(string Keyword_, alias Arg_)
+{
+    alias Keyword = Keyword_;
+    alias Arg = Arg_;
+}
+
+void struct_init(T, KWArgs...)(ref T s) if (__traits(isPOD, T))
+{
+    alias Fields = FieldNameTuple!T;
+    template GetKeyword(alias K) {alias GetKeyword = K.Keyword;}
+    alias Keywords = StaticMap!(GetKeyword, KWArgs);
+    foreach (F; Fields)
+    {
+        static assert(InTuple!(F, Keywords), "missing field in kwargs");
+    }
+    foreach (K; KWArgs)
+    {
+        //static assert(isInstanceOf!(KWArg, K));
+        static assert(InTuple!(K.Keyword, Fields), "kwarg is not a field");
+        __traits(getMember, s, K.Keyword) = K.Arg;
     }
 }

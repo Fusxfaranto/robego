@@ -5,7 +5,7 @@ import util;
 import core.sys.posix.dlfcn;
 import std.conv : to;
 import io = std.stdio : writeln/*, writefln*/, write, stdout;
-import std.file : dirEntries, SpanMode;
+import std.file : dirEntries, SpanMode, timeLastModified, SysTime;
 import std.string : toStringz;
 import std.process : spawnProcess, wait;
 
@@ -40,12 +40,21 @@ void unload_dynamics(ref Command*[string] commands, ref Listener*[][string] list
 
 void reload_dynamics(ref Command*[string] commands, ref Listener*[][string] listeners)
 {
-    auto compilation_pid = spawnProcess(["make", "dynamic"]);
-    if (wait(compilation_pid) != 0)
+    foreach (string src_name; dirEntries("./modules/", "*.d", SpanMode.shallow))
     {
-        debug writeln("compilation failed, not reloading");
-        debug assert(0);
-        return;
+        if (src_name.timeLastModified() >= src_name[0..$-2].timeLastModified(SysTime.min))
+        {
+            debug writeln("compiling " ~ src_name);
+            auto compilation_pid = spawnProcess(["dmd", src_name, "-debug=1", "-O", "-inline",
+                                                 "-fPIC", "-shared", "-defaultlib=libphobos2.so",
+                                                 "-of" ~ src_name[0..$-1] ~ "so"]);
+            if (wait(compilation_pid) != 0)
+            {
+                debug writeln("compilation failed, not reloading");
+                debug assert(0);
+                return;
+            }
+        }
     }
 
     unload_dynamics(commands, listeners);
@@ -64,7 +73,7 @@ void reload_dynamics(ref Command*[string] commands, ref Listener*[][string] list
         aa_merge_inplace!(Command*, string)(commands, m.commands, (Command* a, Command*) => a);
 
         aa_merge_inplace!(Listener*[], Listener*, string)(listeners, m.listeners,
-                                                        (Listener*[] a, Listener* b) => a ~ b, []);
+                                                          (Listener*[] a, Listener* b) => a ~ b, []);
 
         dlopen_ptrs ~= p;
     }

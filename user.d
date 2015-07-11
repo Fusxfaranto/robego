@@ -16,6 +16,7 @@ struct GlobalUser
     string cased_name;
     byte ns_status = -1;
     ubyte auth_level = 50;
+    ubyte ref_count = 1;
 }
 
 struct LocalUser

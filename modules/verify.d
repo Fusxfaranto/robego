@@ -48,9 +48,9 @@ static this()
             c.send_privmsg(channel, "diff from new users: ",
                            format("%s", users_diff(old_users, c.users)));
             c.send_privmsg(channel, "diff from old channels: ",
-                           format("%s", channel_diff(c.channels, old_channels)));
+                           format("%s", channel_diff(c.channels, old_channels).byKey()));
             c.send_privmsg(channel, "diff from new channels: ",
-                           format("%s", channel_diff(old_channels, c.channels)));
+                           format("%s", channel_diff(old_channels, c.channels).byKey()));
         }, 3, UserChannelFlag.NONE, 240);
 
     static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)
@@ -119,6 +119,7 @@ static this()
     {
         static if (has_symbols)
         {
+            // TODO: account for servers without namesx
             string nick = nick_in;
             UserChannelFlag* auth_level_p = nick[0] in auth_chars;
             UserChannelFlagSet auth_level = UserChannelFlag.NONE;
@@ -136,13 +137,21 @@ static this()
 
         const(char)[] lowered_nick = nick.toLower();
         GlobalUser* global = lowered_nick in c.users;
-        if (!global)
-            global = &(c.users[lowered_nick] = GlobalUser(nick));
 
         const(char)[] lowered_chan_name = chan_name.toLower();
         Channel* chan = lowered_chan_name in c.channels;
         if (!chan)
             chan = &(c.channels[lowered_chan_name] = Channel(chan_name));
+
+        if (global)
+        {
+            assert(global.ref_count >= 1);
+            if (lowered_nick !in chan.users)
+                global.ref_count += 1;
+        }
+        else
+            global = &(c.users[lowered_nick] = GlobalUser(nick));
+
         //assert(!(lowered_nick in chan.users));
         static if (has_symbols) chan.users[lowered_nick] = LocalUser(global, auth_level);
         else chan.users[lowered_nick] = LocalUser(global);
@@ -182,6 +191,7 @@ static this()
             string lowered_chan_name = args.length == 1 ? args[0].toLower().idup : message.toLower().idup;
             assert(lowered_chan_name in c.channels,
                    format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
+
             if (nick == c.nick)
             {
                 c.channels.remove(lowered_chan_name);
@@ -192,7 +202,12 @@ static this()
             assert(lowered_nick in c.channels[lowered_chan_name].users,
                    format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.channels[lowered_chan_name].users.remove(lowered_nick);
-            c.users[lowered_nick].ns_status = -1;
+
+            GlobalUser* user = lowered_nick in c.users;
+            assert(user.ref_count);
+            user.ref_count -= 1;
+            if (user.ref_count == 0)
+                c.users.remove(lowered_nick);
         });
 
     m.listeners["QUIT"] = new Listener(
@@ -222,15 +237,17 @@ static this()
                 return;
             }
 
-            c.users[lowered_new_nick] = GlobalUser(message.idup, -1, c.users[lowered_old_nick].auth_level);
+            GlobalUser* user = lowered_old_nick in c.users;
+            assert(user.ref_count);
+            c.users[lowered_new_nick] = GlobalUser(message.idup, -1, user.auth_level, user.ref_count);
             c.users.remove(lowered_old_nick);
 
             foreach (channel; c.channels)
             {
-                if (auto user_p = lowered_old_nick in channel.users)
+                if (LocalUser* luser = lowered_old_nick in channel.users)
                 {
                     channel.users[lowered_new_nick] =
-                        LocalUser(&c.users[lowered_new_nick], user_p.user_channel_flags);
+                        LocalUser(&c.users[lowered_new_nick], luser.user_channel_flags);
                     channel.users.remove(lowered_old_nick);
                 }
             }
@@ -247,7 +264,7 @@ static this()
         function void(Client c, in char[] source, in char[][] args, in char[] message)
         {
             //string lowered_nick = source.get_nick().toLower().idup;
-            c.send_privmsg("#fusxbottest", "MODE " ~ args.join(' '));
+            //c.send_privmsg("#fusxbottest", "MODE " ~ args.join(' '));
 
             if (args[0].is_channel())
             {
