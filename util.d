@@ -209,6 +209,16 @@ bool deep_compare(T)(T a, T b)
     }
 }
 
+T dup_elems(T : U[], U)(T a)
+{
+    T o = new T(a.length);
+    foreach(i, e; a)
+    {
+        o[i] = e.dup;
+    }
+    return o;
+}
+
 template Tuple(T...)
 {
     alias Tuple = T;

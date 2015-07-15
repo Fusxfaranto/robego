@@ -1,5 +1,6 @@
 
 import core.time : MonoTime, Duration, dur;
+import module_base : Listener;
 
 class DelayedAction
 {
@@ -46,7 +47,17 @@ class DelayedCallback : DelayedAction
 }
 
 
+enum TLOption : ubyte {QUEUE, DONE, RUN_THIS, RUN_DONE}
+
 struct TemporaryListener
 {
-    bool delegate(in char[] source, in char[] command, in char[][] args, in char[] message) action;
+    TLOption delegate(in char[] source, in char[] command, in char[][] args, in char[] message) action = null;
+}
+
+struct TLWaitingAction
+{
+    Listener* f;
+    const(char)[] source;
+    const(char)[][] args;
+    const(char)[] message;
 }

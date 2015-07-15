@@ -7,7 +7,7 @@ import core.thread : sleep/*, dur*/;
 import std.file : exists, remove;
 import std.array : split, appender, join;
 import std.algorithm : remove;
-//import std.container.dlist : DList;
+import std.container : DList;
 debug(prof) import std.datetime : StopWatch;
 
 import util;
@@ -48,7 +48,8 @@ final class Client
 
         auto delayed_actions = new SortedList!(DelayedAction, "a.time < b.time");
 
-        TemporaryListener[] temporary_listeners;
+        TemporaryListener temporary_listener;
+        DList!(TLWaitingAction) waiting_on_tl_queue;
         
         bool ready = false;
         bool uds_connected = false;
@@ -130,6 +131,7 @@ final class Client
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
             assert(line.length < 510);
             assert(irc_socket.send(line ~ "\r\n") == line.length + 2);
+            debug writeln("sent -- ", line);
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         }
 
@@ -142,6 +144,7 @@ final class Client
                 assert(irc_socket.send(part) == part.length);
             }
             assert(irc_socket.send("\r\n") == 2);
+            debug writeln("sent -- ", line.join());
             debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         }
 
@@ -200,24 +203,100 @@ final class Client
               writeln();
               }*/
 
-            if (Listener*[]* p = command in listeners)
+            void run_queue_listeners()
             {
-                debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-                foreach (f; *p)
-                    f.f(this, source, args, message);
-                debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
-            }
-
-            // TODO: if (temporary_listeners.length) {} faster??
-            for (size_t i = 0; i < temporary_listeners.length; i++)
-            {
-                if (temporary_listeners[i].action(source, command, args, message))
+                if (Listener*[]* p = command in listeners)
                 {
-                    // TODO: something more efficient
-                    temporary_listeners = temporary_listeners.remove(i);
-                    i--;
+                    foreach (f; *p)
+                    {
+                        if (temporary_listener.action)
+                        {
+                            waiting_on_tl_queue.insertBack(TLWaitingAction(f, source.dup,
+                                                                           args.dup_elems, message.dup));
+                        }
+                        else
+                        {
+                            f.f(this, source, args, message);
+                        }
+                    }
                 }
             }
+
+            void run_listeners()
+            {
+                if (Listener*[]* p = command in listeners)
+                {
+                    foreach (f; *p)
+                    {
+                        f.f(this, source, args, message);
+                    }
+                }
+            }
+
+            void queue_listeners()
+            {
+                if (Listener*[]* p = command in listeners)
+                {
+                    foreach (f; *p)
+                    {
+                        waiting_on_tl_queue.insertBack(TLWaitingAction(f, source.dup,
+                                                                       args.dup_elems, message.dup));
+                    }
+                }
+            }
+
+
+            if (temporary_listener.action)
+            {
+                auto x = temporary_listener.action(source, command, args, message);
+                writeln(x);
+                final switch (x)
+                {
+                    case TLOption.QUEUE:
+                        queue_listeners();
+                        return;
+
+                    case TLOption.DONE:
+                        temporary_listener.action = null;
+                        while (!waiting_on_tl_queue.empty())
+                        {
+                            TLWaitingAction* a = &waiting_on_tl_queue.front();
+                            a.f.f(this, a.source, a.args, a.message);
+                            waiting_on_tl_queue.removeFront();
+                            if (temporary_listener.action)
+                            {
+                                queue_listeners();
+                                return;
+                            }
+                        }
+                        break;
+
+                    case TLOption.RUN_THIS:
+                        run_listeners();
+                        return;
+
+                    case TLOption.RUN_DONE:
+                        run_listeners();
+                        debug writeln(users);
+                        debug writeln(channels);
+                        temporary_listener.action = null;
+                        while (!waiting_on_tl_queue.empty())
+                        {
+                            TLWaitingAction* a = &waiting_on_tl_queue.front();
+                            debug writeln(*a);
+                            a.f.f(this, a.source, a.args, a.message);
+                            waiting_on_tl_queue.removeFront();
+                            if (temporary_listener.action)
+                            {
+                                queue_listeners();
+                                return;
+                            }
+                        }
+                        return;
+                }
+            }
+
+            run_queue_listeners();
         }
 
         void extract_run_lines(ref char[IRC_BUF_LEN] buf, in long len, ref char[] extra)

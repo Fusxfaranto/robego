@@ -97,8 +97,9 @@ static this()
                             alias args_ = args;
                             alias message_ = message;
                             c.send_privmsg("NickServ", "STATUS ", nick);
-                            c.temporary_listeners ~= TemporaryListener(
-                                delegate bool(in char[] source, in char[] command,
+                            assert(!c.temporary_listener.action);
+                            c.temporary_listener = TemporaryListener(
+                                delegate TLOption(in char[] source, in char[] command,
                                               in char[][] args, in char[] message)
                                 {
                                     if (command == "NOTICE" && source.get_nick() == "NickServ")
@@ -111,10 +112,10 @@ static this()
                                             u.ns_status = to!byte(s[2]);
                                             assert(guser.ns_status != -1);
                                             m.listeners["PRIVMSG"].f(c, source_, args_, message_);
-                                            return true;
+                                            return TLOption.DONE;
                                         }
                                     }
-                                    return false;
+                                    return TLOption.QUEUE;
                                 });
                         }
                         else

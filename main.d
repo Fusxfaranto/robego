@@ -25,6 +25,4 @@ static ~this()
 
 
 
-// TODO: change temporary listener array to single var, queue messages if there is a temporary listener
-//       use DList of lazy evals
 // TODO: idle action system

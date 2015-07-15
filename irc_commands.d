@@ -42,12 +42,13 @@ void reload_dynamics(ref Command*[string] commands, ref Listener*[][string] list
 {
     foreach (string src_name; dirEntries("./modules/", "*.d", SpanMode.shallow))
     {
-        if (src_name.timeLastModified() >= src_name[0..$-2].timeLastModified(SysTime.min))
+        string so_name = src_name[0..$-1] ~ "so";
+        if (src_name.timeLastModified() >= so_name.timeLastModified(SysTime.min))
         {
             debug writeln("compiling " ~ src_name);
             auto compilation_pid = spawnProcess(["dmd", src_name, "-debug=1", "-O", "-inline",
                                                  "-fPIC", "-shared", "-defaultlib=libphobos2.so",
-                                                 "-of" ~ src_name[0..$-1] ~ "so"]);
+                                                 "-of" ~ so_name]);
             if (wait(compilation_pid) != 0)
             {
                 debug writeln("compilation failed, not reloading");

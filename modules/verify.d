@@ -6,9 +6,11 @@ import std.stdio;
 import std.uni : toLower;
 import std.format : format;
 import std.array : split;
+import std.string : strip;
 import std.algorithm : map;
+import std.container : redBlackTree, RedBlackTree;
 
-GlobalUser[string] old_users = null;
+GlobalUser[string] old_users = null; // TODO: metadata system that can be used with eval/exec
 Channel[string] old_channels = null;
 
 static this()
@@ -20,21 +22,41 @@ static this()
             old_channels = c.channels.dup;
             c.users = typeof(c.users).init;
             c.channels = typeof(c.channels).init;
+
             c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
-            c.temporary_listeners ~= TemporaryListener(
-                delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
+            RedBlackTree!(string) waiting_on_channels = null;
+            c.temporary_listener = TemporaryListener(
+                delegate TLOption(in char[] source, in char[] command, in char[][] args, in char[] message)
                 {
+                    debug writeln(source, ' ', command, ' ', args, ' ', message);
+                    debug if (waiting_on_channels) writeln(waiting_on_channels[]);
                     if (command == "319" // WHOIS channels reply
                         && args[0] == c.nick
                         && args[0] == args[1])
                     {
-                        foreach (chan_name; message.split(' '))
+                        assert(waiting_on_channels is null);
+                        waiting_on_channels = redBlackTree(message.strip().idup.split(' '));
+                        foreach (chan_name; waiting_on_channels)
                         {
                             c.send_raw("NAMES ", chan_name);
                         }
-                        return true;
                     }
-                    return false;
+                    else if (waiting_on_channels !is null)
+                    {
+                        if (command == "353" // NAMES reply
+                            && args[2].toLower().idup in waiting_on_channels)
+                        {
+                            debug writeln(args[2].toLower());
+                            return TLOption.RUN_THIS;
+                        }
+                        else if (command == "366" // end of NAMES
+                                 && waiting_on_channels.removeKey(args[1].toLower().idup))
+                        {
+                            debug writeln(args[1].toLower());
+                            if (waiting_on_channels.empty()) return TLOption.DONE;
+                        }
+                    }
+                    return TLOption.QUEUE;
                 });
         }, 3, UserChannelFlag.NONE, 240);
 
@@ -97,7 +119,7 @@ static this()
       {
       c.send_privmsg("NickServ", "STATUS ", message);
       string nick = message.toLower().idup;
-      c.temporary_listeners ~= TemporaryListener(
+      c.temporary_listener = TemporaryListener(
       delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
       {
       if (command == "NOTICE" && source.get_nick() == "NickServ")
@@ -310,6 +332,7 @@ static this()
                             break;
 
                         case 'b': case 'e': case 'I':
+                            assert(mode_args);
                             if (mode_args.length > 1) mode_args = mode_args[1..$];
                             else mode_args = null;
                             break;
