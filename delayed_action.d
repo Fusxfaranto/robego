@@ -2,6 +2,9 @@
 import core.time : MonoTime, Duration, dur;
 import module_base : Listener;
 
+import irc;
+import util;
+
 class DelayedAction
 {
     public:
@@ -22,7 +25,6 @@ class DelayedAction
             this(dur!"msecs"(n));
         }
 }
-
 
 class DelayedQuit : DelayedAction {}
 
@@ -45,6 +47,26 @@ class DelayedCallback : DelayedAction
             cb = c;
         }
 }
+
+/*class DelayedEval : DelayedAction
+{
+    public:
+        //                  filename,  code
+        alias ArgsT = Tuple!(const(char[]), const(char[]), Client, const(char[]), const(char[]), const(char[]));
+        ArgsT args;
+
+        this(ArgsT a)
+        {
+            super();
+            args = a;
+        }
+
+        this(T)(ArgsT a, T t)
+        {
+            super(t);
+            args = a;
+        }
+}*/
 
 
 enum TLOption : ubyte {QUEUE, DONE, RUN_THIS, RUN_DONE}

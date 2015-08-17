@@ -10,18 +10,27 @@ import std.string : strip;
 import std.algorithm : map;
 import std.container : redBlackTree, RedBlackTree;
 
-GlobalUser[string] old_users = null; // TODO: metadata system that can be used with eval/exec
-Channel[string] old_channels = null;
+GlobalUser[string]* old_users;
+Channel[string]* old_channels;
 
 static this()
 {
+    m.initialize = function void(ref Variant[string] module_data)
+        {
+            module_data.register_module_data!old_users();
+            module_data.register_module_data!old_channels();
+        };
+
     m.commands["resync"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            old_users = c.users.dup;
-            old_channels = c.channels.dup;
-            c.users = typeof(c.users).init;
-            c.channels = typeof(c.channels).init;
+            *old_users = c.users.dup;
+            *old_channels = c.channels.dup;
+            c.users = c.users.init;
+            c.channels = c.channels.init;
+
+            debug writeln(&old_users);
+            debug writeln(&old_channels);
 
             c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
             RedBlackTree!(string) waiting_on_channels = null;
@@ -66,13 +75,13 @@ static this()
             alias users_diff = aa_diff!(deep_compare!GlobalUser, GlobalUser[string]);
             alias channel_diff = aa_diff!(deep_compare!Channel, Channel[string]);
             c.send_privmsg(channel, "diff from old users: ",
-                           format("%s", users_diff(c.users, old_users)));
+                           format("%s", users_diff(c.users, *old_users)));
             c.send_privmsg(channel, "diff from new users: ",
-                           format("%s", users_diff(old_users, c.users)));
+                           format("%s", users_diff(*old_users, c.users)));
             c.send_privmsg(channel, "diff from old channels: ",
-                           format("%s", channel_diff(c.channels, old_channels).byKey()));
+                           format("%s", channel_diff(c.channels, *old_channels).byKey()));
             c.send_privmsg(channel, "diff from new channels: ",
-                           format("%s", channel_diff(old_channels, c.channels).byKey()));
+                           format("%s", channel_diff(*old_channels, c.channels).byKey()));
         }, 3, UserChannelFlag.NONE, 240);
 
     static Channel[] channels_with_user(Channel[string] channels, string lowered_nick)

@@ -1,7 +1,7 @@
 
 
 import std.stdio : writeln;
-import std.string : stripRight;
+import std.string : stripRight, replace;
 import std.functional : binaryFun;
 import std.traits : isInstanceOf, FieldNameTuple, isPointer, isAssociativeArray,
     ValueType, KeyType /*, hasMember*/;
@@ -156,6 +156,20 @@ unittest
         assert(x == l.front);
         l.pop();
     }
+}
+
+
+// this can't be inout.  i don't know why.  file a bug report?
+const(char[]) escape_code_as_string(const char[] code)
+{
+    return code
+        .replace("\\", "\\\\")
+        .replace("\?", "\\\?")
+        .replace("\'", "\\\'")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t");
 }
 
 

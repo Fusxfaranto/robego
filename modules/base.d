@@ -13,6 +13,7 @@ static this()
             debug writeln("reload command");
             c.send_privmsg("#fusxbottest", "reload queued");
             c.delayed_actions.insert(new DelayedReload());
+            c.delayed_actions.insert(new DelayedCallback({c.send_raw("PRIVMSG #fusxbottest :reloaded");}));
         }, 3, UserChannelFlag.NONE, 250);
 
     m.commands["quit"] = new Command(

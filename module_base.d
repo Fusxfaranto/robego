@@ -19,8 +19,5 @@ struct IRCModule
 {
     Listener*[string] listeners;
     Command*[string] commands;
+    void function(ref Variant[string]) initialize = null;
 }
-
-/*
-
-*/

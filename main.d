@@ -26,3 +26,4 @@ static ~this()
 
 
 // TODO: idle action system
+// TODO: constants file
