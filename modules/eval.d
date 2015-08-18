@@ -13,7 +13,7 @@ import irc_commands;
 
 static this()
 {
-    m.commands["exec"] = new Command(// TODO: make this use a DelayedAction to hopefully avoid weirdness
+    m.commands["exec"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
             string so_name = "module_files/eval/" ~ randomUUID().toString() ~ ".so";

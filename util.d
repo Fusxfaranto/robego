@@ -3,9 +3,13 @@
 import std.stdio : writeln;
 import std.string : stripRight, replace;
 import std.functional : binaryFun;
+import std.algorithm : map;
+import std.array : array;
 import std.traits : isInstanceOf, FieldNameTuple, isPointer, isAssociativeArray,
     ValueType, KeyType /*, hasMember*/;
 import std.typetuple : allSatisfy;
+import std.conv : to;
+import std.json : JSONValue;
 
 
 const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
@@ -170,6 +174,46 @@ const(char[]) escape_code_as_string(const char[] code)
         .replace("\n", "\\n")
         .replace("\r", "\\r")
         .replace("\t", "\\t");
+}
+
+
+T static_json(T)(auto ref in JSONValue json)
+{
+    static if (__traits(isIntegral, T))
+    {
+        return to!T(json.integer());
+    }
+    else static if (is(T == string))
+    {
+        return json.str();
+    }
+    else static if (is(T : U[], U))
+    {
+        return array(json.array().map!(x => static_json!U(x))());
+    }
+    else static if (is(T : V[string], V))
+    {
+        T t;
+        foreach (string k, JSONValue v; json.object())
+        {
+            t[k] = static_json!V(v);
+        }
+        return t;
+    }
+    else static if (__traits(isPOD, T))
+    {
+        T t;
+        foreach (field_name; FieldNameTuple!T)
+        {
+            alias U = typeof(__traits(getMember, t, field_name));
+            __traits(getMember, t, field_name) = static_json!U(json.object[field_name]);
+        }
+        return t;
+    }
+    else
+    {
+        static assert(0);
+    }
 }
 
 

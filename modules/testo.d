@@ -50,23 +50,31 @@ static this()
             *testo_array = [6, 2, 5, 23];
         }, -1, UserChannelFlag.NONE, 0);
 
-    m.commands["adminme"] = new Command(
+    m.commands["testo4"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
-            c.users["fusxfaranto"].auth_level = 255;
+            c.send_privmsg("NickServ", "STATUS Robego");
+            assert(!c.temporary_listener.action);
+            alias source_ = source;
+            alias channel_ = channel;
+            alias message_ = message;
+            c.temporary_listener = TemporaryListener(
+                delegate TLOption(in char[] source, in char[] command, in char[][] args, in char[] message)
+                {
+                    if (command == "NOTICE" && source.get_nick() == "NickServ")
+                    {
+                        auto s = message.splitN!2(' ');
+                        if (s[0] == "STATUS" && s[1] == "Robego")
+                        {
+                            import core.memory : GC;
+                            writeln(source.ptr, ' ', GC.query(source.ptr));
+                            writeln(source_.ptr, ' ', GC.query(source_.ptr));
+                            return TLOption.DONE;
+                        }
+                    }
+                    return TLOption.QUEUE;
+                });
         }, -1, UserChannelFlag.NONE, 0);
-
-    // m.listeners["PRIVMSG"] = new Listener(
-    //     function void(Client c, in char[] source, in char[][] args, in char[] message)
-    //     {
-    //         writeln("testo privmsg listener");
-    //     });
-
-    // m.listeners["JOIN"] = new Listener(
-    //     function void(Client c, in char[] source, in char[][] args, in char[] message)
-    //     {
-    //         writeln("testo join listener");
-    //     });
 }
 
 static ~this()

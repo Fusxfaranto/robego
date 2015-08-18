@@ -32,7 +32,7 @@ static this()
             debug writeln(&old_users);
             debug writeln(&old_channels);
 
-            c.send_raw("WHOIS ", c.nick); // to get a list of channels we're in
+            c.send_raw("WHOIS ", c.config.nick); // to get a list of channels we're in
             RedBlackTree!(string) waiting_on_channels = null;
             c.temporary_listener = TemporaryListener(
                 delegate TLOption(in char[] source, in char[] command, in char[][] args, in char[] message)
@@ -40,7 +40,7 @@ static this()
                     debug writeln(source, ' ', command, ' ', args, ' ', message);
                     debug if (waiting_on_channels) writeln(waiting_on_channels[]);
                     if (command == "319" // WHOIS channels reply
-                        && args[0] == c.nick
+                        && args[0] == c.config.nick
                         && args[0] == args[1])
                     {
                         assert(waiting_on_channels is null);
@@ -223,7 +223,7 @@ static this()
             assert(lowered_chan_name in c.channels,
                    format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
 
-            if (nick == c.nick)
+            if (nick == c.config.nick)
             {
                 c.channels.remove(lowered_chan_name);
                 return;
@@ -352,6 +352,125 @@ static this()
                 }
 
                 assert(!mode_args);
+            }
+        });
+
+
+    m.listeners["PRIVMSG"] = new Listener(
+        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        {
+            if (message.length >= 2 && message[0] == COMMAND_CHAR)
+            {
+                const(char)[][2] msg = split1(message[1..$], ' ');
+                if (Command** p = msg[0] in c.commands)
+                {
+                    Command* cmd = *p;
+                    const(char)[] nick = source.get_nick();
+                    string lowered_nick = nick.toLower().idup;
+                    bool in_channel = args[0].is_channel();
+                    const(char)[] channel_name = in_channel ? args[0] : nick;
+
+                    Channel* channel;
+                    LocalUser* user;
+                    GlobalUser* guser;
+                    if (in_channel)
+                    {
+                        channel = args[0].toLower() in c.channels;
+                        assert(channel);
+                        user = lowered_nick in channel.users;
+                        assert(user);
+                        guser = user.global_reference;
+                        assert(guser == (lowered_nick in c.users));
+                    }
+                    else
+                    {
+                        guser = lowered_nick in c.users;
+                        if (!guser)
+                        {
+                            guser = &(c.users[lowered_nick] = GlobalUser(nick.idup));
+                            guser.ref_count = 0;
+                        }
+                        assert(guser);
+                        assert(guser == (lowered_nick in c.users));
+                    }
+
+                    void check_auth_and_run_command(int depth = 1)
+                    {
+                        void ns_verify_and_rerun_command()
+                        {
+                            c.send_privmsg("NickServ", "STATUS ", nick);
+                            assert(!c.temporary_listener.action);
+                            c.temporary_listener = TemporaryListener(
+                                delegate TLOption(in char[] source, in char[] command,
+                                                  in char[][] args, in char[] message)
+                                {
+                                    if (command == "NOTICE" && source.get_nick() == "NickServ")
+                                    {
+                                        auto s = message.splitN!2(' ');
+                                        if (s[0] == "STATUS" && s[1].toLower() == lowered_nick)
+                                        {
+                                            assert(!((lowered_nick in c.users) && (guser.ref_count < 1)));
+                                            if (lowered_nick !in c.users)
+                                            {
+                                                guser = &(c.users[lowered_nick] = GlobalUser(nick.idup));
+                                                guser.ref_count = 0;
+                                            }
+
+                                            assert((lowered_nick in c.users) is guser);
+                                            guser.ns_status = to!byte(s[2]);
+                                            assert(guser.ns_status >= 0 && guser.ns_status <= 3);
+
+                                            if (auto ovr = lowered_nick in c.config.auth_level_overrides)
+                                            {
+                                                if (guser.ns_status >= ovr.min_ns_status)
+                                                {
+                                                    guser.auth_level = ovr.auth_level;
+                                                }
+                                            }
+
+                                            check_auth_and_run_command(depth + 1);
+                                            return TLOption.DONE;
+                                        }
+                                    }
+                                    return TLOption.QUEUE;
+                                });
+                        }
+
+                        scope(exit)
+                        {
+                            assert(!(in_channel && guser.ref_count == 0));
+                            if (!in_channel && guser.ref_count == 0)
+                                c.users.remove(lowered_nick);
+                        }
+
+                        if (in_channel && user.user_channel_flags < cmd.min_channel_auth_level)
+                        {
+                            c.send_privmsg(channel_name, "Error - your channel auth level "
+                                           "is too low to use this command.");
+                            return;
+                        }
+                        if (guser.auth_level < cmd.min_auth_level)
+                        {
+                            if (depth <= 1)
+                                ns_verify_and_rerun_command();
+                            else
+                                c.send_privmsg(channel_name, "Error - you are not allowed to use this command.");
+                            return;
+                        }
+                        if (guser.ns_status < cmd.min_ns_status)
+                        {
+                            if (depth <= 1)
+                                ns_verify_and_rerun_command();
+                            else
+                                c.send_privmsg(args[0], "Error - you must be identified to use this command.");
+                            return;
+                        }
+
+                        cmd.f(c, source, channel_name, msg[1]);
+                    }
+
+                    check_auth_and_run_command();
+                }
             }
         });
 }
