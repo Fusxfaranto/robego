@@ -4,7 +4,7 @@ extern (C) IRCModule m;
 
 //import std.stdio;
 import core.sys.linux.dlfcn;
-import std.file : write, remove;
+import std.file : write, remove, rmdirRecurse, mkdir;
 import std.string : replace;
 import std.conv : to;
 import std.uuid: randomUUID;
@@ -13,6 +13,15 @@ import irc_commands;
 
 static this()
 {
+    m.initialize = function void(ref Variant[string] module_data, bool first_time)
+        {
+            if (first_time)
+            {
+                rmdirRecurse("./module_files/eval/");
+                mkdir("./module_files/eval/");
+            }
+        };
+
     m.commands["exec"] = new Command(
         function void(Client c, in char[] source, in char[] channel, in char[] message)
         {
@@ -40,6 +49,7 @@ static this()
 
             void* p = dlopen(so_name.toStringz(), RTLD_LAZY);
             check_dlerror("loading temp eval file");
+            // TODO: should this get dlclosed?  (it can't before program exit)
 
             // for some godforsaken reason the arguments get interpreted backwards
             auto f = cast(void function(Client c, in char[], in char[], in char[]))(dlsym(p, "f"));

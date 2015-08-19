@@ -33,9 +33,9 @@ struct SO
 //private void*[] dlopen_ptrs = [];
 //private string[] loaded_sos = [];
 
-SO[string] loaded_sos;
+private SO[string] loaded_sos;
 
-string[] previous_uuids = [];
+private string[] previous_uuids = [];
 
 void clear_imports(ref Command*[string] commands, ref Listener*[][string] listeners)
 {
@@ -44,8 +44,8 @@ void clear_imports(ref Command*[string] commands, ref Listener*[][string] listen
     listeners = typeof(listeners).init;
 }
 
-void import_from_loaded_sos(ref Variant[string] module_data,
-                            ref Command*[string] commands, ref Listener*[][string] listeners)
+void import_from_loaded_sos(ref Variant[string] module_data, ref Command*[string] commands,
+                            ref Listener*[][string] listeners, bool first_time)
 {
     clear_imports(commands, listeners);
 
@@ -58,7 +58,7 @@ void import_from_loaded_sos(ref Variant[string] module_data,
             aa_merge_inplace!(Listener*[], Listener*, string)(listeners, so.m.listeners,
                                                               (Listener*[] a, Listener* b) => a ~ b, []);
             if (so.m.initialize)
-                so.m.initialize(module_data);
+                so.m.initialize(module_data, first_time);
             else
                 debug writeln("no init function");
 
@@ -87,7 +87,6 @@ void load_so(string so_name, ref Command*[string] commands, ref Listener*[][stri
 
 void unload_dynamics(ref Command*[string] commands, ref Listener*[][string] listeners)
 {
-    string s = "./modules_lib_temp/";
     foreach (SO so; loaded_sos)
     {
         debug writeln("unload_dynamics ", so.p);
@@ -96,8 +95,7 @@ void unload_dynamics(ref Command*[string] commands, ref Listener*[][string] list
     debug loaded_sos = null;
     debug writeln("unload_dynamics done");
 
-    // TODO: this causes an InvalidMemoryOperationError when called from destructor, no clue why
-    //rmdirRecurse(s);
+    //rmdirRecurse("./modules_lib_temp/");
 }
 
 void reload_dynamics(ref Variant[string] module_data,
@@ -148,7 +146,7 @@ void reload_dynamics(ref Variant[string] module_data,
         }
     }
 
-    import_from_loaded_sos(module_data, commands, listeners);
+    import_from_loaded_sos(module_data, commands, listeners, first_time);
 
     previous_uuids ~= uuid;
 

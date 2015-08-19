@@ -11,7 +11,7 @@ static this()
 {
     writeln("testo module constructor");
 
-    m.initialize = function void(ref Variant[string] module_data)
+    m.initialize = function void(ref Variant[string] module_data, bool first_time)
         {
             writeln("testo init function");
             module_data.register_module_data!testo_int(5554);

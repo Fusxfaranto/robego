@@ -98,50 +98,50 @@ void aa_merge_inplace(T, U, S)(ref T[S] a, ref U[S] b, T function(T, U) pure cal
 
 class SortedList(T, alias f) if(is(typeof(binaryFun!f(T.init, T.init)) == bool))
 {
-    private:
-        struct node
-        {
-            node* next;
-            T datum;
-        }
-        node* first = null;
-        alias pred = binaryFun!f;
+private:
+    struct node
+    {
+        node* next;
+        T datum;
+    }
+    node* first = null;
+    alias pred = binaryFun!f;
 
-    public:
-        bool has_items()
-        {
-            return cast(bool)first;
-        }
+public:
+    bool has_items()
+    {
+        return cast(bool)first;
+    }
 
-        T front()
-        {
-            assert(first);
-            return first.datum;
-        }
+    T front()
+    {
+        assert(first);
+        return first.datum;
+    }
 
-        void pop()
-        {
-            assert(first);
-            first = first.next;
-        }
+    void pop()
+    {
+        assert(first);
+        first = first.next;
+    }
 
-        void insert(T elem)
+    void insert(T elem)
+    {
+        if (first is null)
         {
-            if (first is null)
-            {
-                first = new node(null, elem);
-            }
-            else if (!pred(first.datum, elem))
-            {
-                first = new node(first, elem);
-            }
-            else
-            {
-                node* n = first;
-                for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
-                n.next = new node(n.next, elem);
-            }
+            first = new node(null, elem);
         }
+        else if (!pred(first.datum, elem))
+        {
+            first = new node(first, elem);
+        }
+        else
+        {
+            node* n = first;
+            for (; n.next !is null && pred(n.next.datum, elem); n = n.next) {}
+            n.next = new node(n.next, elem);
+        }
+    }
 }
 
 unittest

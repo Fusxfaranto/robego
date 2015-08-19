@@ -15,7 +15,7 @@ Channel[string]* old_channels;
 
 static this()
 {
-    m.initialize = function void(ref Variant[string] module_data)
+    m.initialize = function void(ref Variant[string] module_data, bool first_time)
         {
             module_data.register_module_data!old_users();
             module_data.register_module_data!old_channels();

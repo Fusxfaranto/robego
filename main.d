@@ -11,6 +11,8 @@ void main()
 
     c.run_loop();
 
+    c.destroy();
+
     debug writeln("end of main");
     debug stdout.flush();
 }
@@ -27,3 +29,4 @@ static ~this()
 
 // TODO: idle action system
 // TODO: constants file
+// TODO: remove uds system if i haven't decided to actually make it useful by release time
