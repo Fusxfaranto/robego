@@ -1,0 +1,23 @@
+{
+    "nick": "Robego",
+    "username": "Robego",
+    "realname": "Robego",
+    "network": "irc.synirc.net",
+    "port": 6667,
+    "initial_channels": ["#fusxbottest"],
+
+    "auth_level_overrides": {
+        "fusxfaranto": {"auth_level": 255, "min_ns_status": 3}
+    },
+
+    "room_overrides": {
+        "#fusxbottest": {
+            "listeners": {
+                "stupid": true
+            },
+            "commands": {
+                "testo": [-1, "%", 50]
+            }
+        }
+    }
+}

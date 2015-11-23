@@ -23,14 +23,14 @@ static this()
         };
 
     m.commands["exec"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             string so_name = "module_files/eval/" ~ randomUUID().toString() ~ ".so";
 
             write("module_files/eval/temp.d",
                   "import module_base; import std.stdio; import std.variant : Variant;"
                   "import std.format : format;"
-                  "extern (C) void f(in char[] message, in char[] channel, in char[] source, Client c) "
+                  "extern (C) void f(string message, string channel, string source, Client c) "
                   "{"
                   // "Client c = *(cast(Client*)0x" ~ to!string(&c) ~ ");"
                   ~ message ~
@@ -52,7 +52,7 @@ static this()
             // TODO: should this get dlclosed?  (it can't before program exit)
 
             // for some godforsaken reason the arguments get interpreted backwards
-            auto f = cast(void function(Client c, in char[], in char[], in char[]))(dlsym(p, "f"));
+            auto f = cast(void function(Client c, string, string, string))(dlsym(p, "f"));
             check_dlerror("importing eval function");
 
             f(c, source, channel, message);
@@ -65,7 +65,7 @@ static this()
         }, 3, UserChannelFlag.NONE, 255);
 
     m.commands["eval"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             m.commands["exec"].f(c, source, channel,
                                  "c.send_privmsg(channel,format(\"%s\"," ~ message ~ "));");

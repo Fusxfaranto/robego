@@ -73,13 +73,13 @@ enum TLOption : ubyte {QUEUE, DONE, RUN_THIS, RUN_DONE}
 
 struct TemporaryListener
 {
-    TLOption delegate(in char[] source, in char[] command, in char[][] args, in char[] message) action = null;
+    TLOption delegate(string source, string command, string[] args, string message) action = null;
 }
 
 struct TLWaitingAction
 {
     Listener* f;
-    const(char)[] source;
-    const(char)[][] args;
-    const(char)[] message;
+    string source;
+    string[] args;
+    string message;
 }

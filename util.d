@@ -6,10 +6,11 @@ import std.functional : binaryFun;
 import std.algorithm : map;
 import std.array : array;
 import std.traits : isInstanceOf, FieldNameTuple, isPointer, isAssociativeArray,
-    ValueType, KeyType /*, hasMember*/;
+    ValueType, KeyType, isCallable /*, hasMember*/;
 import std.typetuple : allSatisfy;
 import std.conv : to;
-import std.json : JSONValue;
+import std.json : JSONValue, JSON_TYPE, JSONException;
+import std.exception : enforce;
 
 
 const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
@@ -53,7 +54,7 @@ bool is_channel(in char[] s) pure nothrow @safe
     return s[0] == '#';
 }
 
-const(char[]) get_nick(in char[] s) pure nothrow @safe
+const(inout(char)[]) get_nick(inout char[] s) pure nothrow @safe
 {
     return split1(s, '!')[0];
 }
@@ -96,6 +97,7 @@ void aa_merge_inplace(T, U, S)(ref T[S] a, ref U[S] b, T function(T, U) pure cal
     }
 }
 
+// TODO: maybe just replace with a PQ
 class SortedList(T, alias f) if(is(typeof(binaryFun!f(T.init, T.init)) == bool))
 {
 private:
@@ -179,7 +181,17 @@ const(char[]) escape_code_as_string(const char[] code)
 
 T static_json(T)(auto ref in JSONValue json)
 {
-    static if (__traits(isIntegral, T))
+    // json constructor
+    static if (__traits(compiles, T(json)))
+    {
+        return T(json);
+    }
+    else static if (is(T == bool))
+    {
+        enforce(json.type() == JSON_TYPE.TRUE || json.type() == JSON_TYPE.FALSE);
+        return json.type() == JSON_TYPE.TRUE;
+    }
+    else static if (__traits(isIntegral, T))
     {
         return to!T(json.integer());
     }
@@ -203,10 +215,25 @@ T static_json(T)(auto ref in JSONValue json)
     else static if (__traits(isPOD, T))
     {
         T t;
-        foreach (field_name; FieldNameTuple!T)
+        if (json.type() == JSON_TYPE.OBJECT)
         {
-            alias U = typeof(__traits(getMember, t, field_name));
-            __traits(getMember, t, field_name) = static_json!U(json.object[field_name]);
+            foreach (field_name; FieldNameTuple!T)
+            {
+                alias U = typeof(__traits(getMember, t, field_name));
+                __traits(getMember, t, field_name) = static_json!U(json.object[field_name]);
+            }
+        }
+        else if (json.type() == JSON_TYPE.ARRAY)
+        {
+            foreach (int i, field_name; FieldNameTuple!T)
+            {
+                alias U = typeof(__traits(getMember, t, field_name));
+                __traits(getMember, t, field_name) = static_json!U(json.array[i]);
+            }
+        }
+        else
+        {
+            throw new JSONException("not object or array");
         }
         return t;
     }
@@ -267,12 +294,12 @@ bool deep_compare(T)(T a, T b)
     }
 }
 
-T dup_elems(T : U[], U)(T a)
+T idup_elems(T : U[], U)(T a)
 {
     T o = new T(a.length);
     foreach(i, e; a)
     {
-        o[i] = e.dup;
+        o[i] = e.idup;
     }
     return o;
 }

@@ -10,6 +10,7 @@ import std.algorithm : remove;
 import std.container : DList;
 import std.variant : Variant;
 import std.json : /*JSONValue, */parseJSON;
+import std.uni : toLower;
 debug(prof) import std.datetime : StopWatch;
 
 import util;
@@ -51,6 +52,37 @@ public:
             byte min_ns_status;
         }
         AuthLevelOverride[string] auth_level_overrides;
+
+        struct RoomOverride
+        {
+            bool[string] listeners;
+
+            struct CommandParams
+            {
+                byte min_ns_status;
+
+                struct UserChannelFlag_
+                {
+                    UserChannelFlag f;
+                    alias f this;
+
+                    this(in JSONValue json)
+                    {
+                        f = auth_chars[json.str()[0]];
+                    }
+
+                    this(UserChannelFlag f_)
+                    {
+                        f = f_;
+                    }
+                }
+                UserChannelFlag_ min_channel_auth_level;
+
+                ubyte min_auth_level;
+            }
+            CommandParams[string] commands;
+        }
+        RoomOverride[string] room_overrides;
     }
     Config config;
 
@@ -117,7 +149,6 @@ public:
         reload();
     }
 
-    // TODO: things are pretty broken when run from the real destructor, don't think this is a great solution
     ~this()
     //void destroy_client()
     {
@@ -140,7 +171,7 @@ public:
         debug stdout.flush();
     }
 
-    void send_raw(in char[] line)
+    void send_raw(string line)
     {
         debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         assert(line.length < 510);
@@ -149,7 +180,7 @@ public:
         debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
     }
 
-    void send_raw(in char[][] line ...)
+    void send_raw(string[] line ...)
     {
         debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
         foreach (part; line)
@@ -171,13 +202,33 @@ public:
         //debug if (ready) send_raw("PRIVMSG #fusxbottest :reloaded");
     }
 
-    void process_line(in char[] line)
+    void run_listener(ref Listener f, string source, string[] args, string message)
+    {
+        bool enabled = f.enabled;
+        if (args.length > 0)
+        {
+            if (auto room_override = args[0].toLower() in config.room_overrides)
+            {
+                if (auto ovr = f.name in room_override.listeners)
+                {
+                    enabled = *ovr;
+                }
+            }
+        }
+
+        if (enabled)
+        {
+            f.f(this, source, args, message);
+        }
+    }
+
+    void process_line(string line)
     {
         debug writeln(line);
         debug(prof) writeln(__LINE__, ' ', sw.peek().usecs);
 
         size_t index = 0;
-        const(char)[] source;
+        string source;
         if (line[0] == ':')
         {
             for (index = 1; /*index < line.length &&*/ line[index] != ' '; index++) {}
@@ -186,13 +237,13 @@ public:
         }
         else source = "";
 
-        const(char)[] command;
+        string command;
         auto prev_index = index;
         for (; line[index] != ' '; index++) {}
         command = line[prev_index..index];
         index++;
 
-        const(char)[][] args;
+        string[] args;
         auto args_appender = appender(args);
         while (index < line.length && line[index] != ':')
         {
@@ -203,7 +254,7 @@ public:
         }
         args = args_appender.data;
 
-        const(char)[] message;
+        string message;
         if (index < line.length) message = line[(index + 1)..$];
         else message = "";
 
@@ -226,12 +277,12 @@ public:
                 {
                     if (temporary_listener.action)
                     {
-                        waiting_on_tl_queue.insertBack(TLWaitingAction(f, source.dup,
-                                                                       args.dup_elems, message.dup));
+                        waiting_on_tl_queue.insertBack(
+                            TLWaitingAction(f, source.dup,args.idup_elems, message.dup));
                     }
                     else
                     {
-                        f.f(this, source, args, message);
+                        run_listener(*f, source, args, message);
                     }
                 }
             }
@@ -243,7 +294,7 @@ public:
             {
                 foreach (f; *p)
                 {
-                    f.f(this, source, args, message);
+                    run_listener(*f, source, args, message);
                 }
             }
         }
@@ -254,8 +305,8 @@ public:
             {
                 foreach (f; *p)
                 {
-                    waiting_on_tl_queue.insertBack(TLWaitingAction(f, source.dup,
-                                                                   args.dup_elems, message.dup));
+                    waiting_on_tl_queue.insertBack(
+                        TLWaitingAction(f, source.dup,args.idup_elems, message.dup));
                 }
             }
         }
@@ -276,7 +327,7 @@ public:
                 while (!waiting_on_tl_queue.empty())
                 {
                     TLWaitingAction* a = &waiting_on_tl_queue.front();
-                    a.f.f(this, a.source, a.args, a.message);
+                    run_listener(*a.f, source, args, message);
                     waiting_on_tl_queue.removeFront();
                     if (temporary_listener.action)
                     {
@@ -299,7 +350,7 @@ public:
                 {
                     TLWaitingAction* a = &waiting_on_tl_queue.front();
                     debug writeln(*a);
-                    a.f.f(this, a.source, a.args, a.message);
+                    run_listener(*a.f, source, args, message);
                     waiting_on_tl_queue.removeFront();
                     if (temporary_listener.action)
                     {
@@ -322,7 +373,7 @@ public:
 
         if (buf[0] == '\n')
         {
-            process_line(extra[0..($ - has_r)]);
+            process_line(extra[0..($ - has_r)].idup);
             index = 1;
         }
 
@@ -333,10 +384,21 @@ public:
                 has_r = buf[i - 1] == '\r';
 
                 if (index == -1)
-                    process_line(extra ~ buf[0..(i - has_r)]);
+                {
+                    if (extra.length)
+                    {
+                        //debug writeln("extra: ", extra);
+                        process_line((extra ~ buf[0..(i - has_r)]).idup);
+                    }
+                    else
+                    {
+                        process_line(buf[0..(i - has_r)].idup);
+                    }
+                }
                 else
-                    // if weird behavior happens, it might be worth putting a .dup here
-                    process_line(buf[index..(i - has_r)]);
+                {
+                    process_line(buf[index..(i - has_r)].idup);
+                }
             
                 index = i + 1;
             }
@@ -400,7 +462,7 @@ public:
                     writeln(uds_buf);
                     writeln();
 
-                    send_raw("PRIVMSG #fusxbottest :", uds_buf[0..uds_n]);
+                    send_raw("PRIVMSG #fusxbottest :", uds_buf[0..uds_n].idup);
             
                     uds_buf[0..uds_n] = 0;
                 }
@@ -468,27 +530,27 @@ public:
 }
 
 
-void send_privmsg(Client c, in char[] channel, in char[] message)
+void send_privmsg(Client c, string channel, string message)
 {
     c.send_raw("PRIVMSG ", channel, " :", message);
 }
 
-void send_privmsg(Client c, in char[] channel, in char[][] message_parts ...)
+void send_privmsg(Client c, string channel, string[] message_parts ...)
 {
     c.send_raw("PRIVMSG ", channel, " :", message_parts.join());
 }
 
-void send_join(Client c, in char[] channel)
+void send_join(Client c, string channel)
 {
     c.send_raw("JOIN :", channel);
 }
 
-void send_join(Client c, in char[][] channels)
+void send_join(Client c, string[] channels)
 {
     c.send_raw("JOIN :", channels.join(','));
 }
 
-void send_part(Client c, in char[] channel)
+void send_part(Client c, string channel)
 {
     c.send_raw("PART :", channel);
     //c.channels.remove(channel.idup);

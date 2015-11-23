@@ -8,7 +8,7 @@ import std.uni : toLower;
 static this()
 {
     m.commands["reload"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             debug writeln("reload command");
             c.send_privmsg("#fusxbottest", "reload queued");
@@ -17,32 +17,32 @@ static this()
         }, 3, UserChannelFlag.NONE, 250);
 
     m.commands["quit"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             c.send_raw("QUIT :quitting from command");
             c.delayed_actions.insert(new DelayedQuit());
         }, 3, UserChannelFlag.NONE, 240);
 
     m.commands["raw"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             c.send_raw(message);
         }, 3, UserChannelFlag.NONE, 250);
 
     m.commands["join"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             c.send_join(message);
         }, 3, UserChannelFlag.NONE, 240);
 
     m.commands["part"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             c.send_part(message);
         }, 3, UserChannelFlag.NONE, 240);
 
     m.listeners["PING"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
             c.send_raw("PONG :", message);
             debug writeln("sent pong");

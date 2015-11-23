@@ -49,12 +49,19 @@ void import_from_loaded_sos(ref Variant[string] module_data, ref Command*[string
 {
     clear_imports(commands, listeners);
 
-    foreach (SO so; loaded_sos)
+    foreach (string so_name, SO so; loaded_sos)
     {
         if (so.active)
         {
             aa_merge_inplace!(Command*, string)(commands, so.m.commands, (Command* a, Command*) => a);
 
+            foreach(string s, Listener* l; so.m.listeners)
+            {
+                if (l.name == "")
+                {
+                    l.name = so_name[19..$-39] ~ "." ~ s;
+                }
+            }
             aa_merge_inplace!(Listener*[], Listener*, string)(listeners, so.m.listeners,
                                                               (Listener*[] a, Listener* b) => a ~ b, []);
             if (so.m.initialize)

@@ -22,7 +22,7 @@ static this()
         };
 
     m.commands["resync"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             *old_users = c.users.dup;
             *old_channels = c.channels.dup;
@@ -35,7 +35,7 @@ static this()
             c.send_raw("WHOIS ", c.config.nick); // to get a list of channels we're in
             RedBlackTree!(string) waiting_on_channels = null;
             c.temporary_listener = TemporaryListener(
-                delegate TLOption(in char[] source, in char[] command, in char[][] args, in char[] message)
+                delegate TLOption(string source, string command, string[] args, string message)
                 {
                     debug writeln(source, ' ', command, ' ', args, ' ', message);
                     debug if (waiting_on_channels) writeln(waiting_on_channels[]);
@@ -44,7 +44,7 @@ static this()
                         && args[0] == args[1])
                     {
                         assert(waiting_on_channels is null);
-                        waiting_on_channels = redBlackTree(message.strip().idup.split(' '));
+                        waiting_on_channels = redBlackTree(message.strip().split(' '));
                         foreach (chan_name; waiting_on_channels)
                         {
                             c.send_raw("NAMES ", chan_name);
@@ -53,13 +53,13 @@ static this()
                     else if (waiting_on_channels !is null)
                     {
                         if (command == "353" // NAMES reply
-                            && args[2].toLower().idup in waiting_on_channels)
+                            && args[2].toLower() in waiting_on_channels)
                         {
                             debug writeln(args[2].toLower());
                             return TLOption.RUN_THIS;
                         }
                         else if (command == "366" // end of NAMES
-                                 && waiting_on_channels.removeKey(args[1].toLower().idup))
+                                 && waiting_on_channels.removeKey(args[1].toLower()))
                         {
                             debug writeln(args[1].toLower());
                             if (waiting_on_channels.empty()) return TLOption.DONE;
@@ -70,7 +70,7 @@ static this()
         }, 3, UserChannelFlag.NONE, 240);
 
     m.commands["compareold"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             alias users_diff = aa_diff!(deep_compare!GlobalUser, GlobalUser[string]);
             alias channel_diff = aa_diff!(deep_compare!Channel, Channel[string]);
@@ -96,11 +96,11 @@ static this()
     }
 
     m.commands["userstate"] = new Command(
-        function void(Client c, in char[] source, in char[] channel, in char[] message)
+        function void(Client c, string source, string channel, string message)
         {
             if (message.length)
             {
-                string lowered_nick = message.toLower().idup;
+                string lowered_nick = message.toLower();
                 if (auto u = lowered_nick in c.users)
                 {
                     c.send_privmsg(channel, format("%s", *u));
@@ -124,12 +124,12 @@ static this()
         }, 3, UserChannelFlag.NONE, 240);
 
 /*    m.commands["verify"] = new Command(
-      function void(Client c, in char[] source, in char[] channel, in char[] message)
+      function void(Client c, string source, string channel, string message)
       {
       c.send_privmsg("NickServ", "STATUS ", message);
-      string nick = message.toLower().idup;
+      string nick = message.toLower();
       c.temporary_listener = TemporaryListener(
-      delegate bool(in char[] source, in char[] command, in char[][] args, in char[] message)
+      delegate bool(string source, string command, string[] args, string message)
       {
       if (command == "NOTICE" && source.get_nick() == "NickServ")
       {
@@ -166,10 +166,10 @@ static this()
             alias nick = nick_in;
         }
 
-        const(char)[] lowered_nick = nick.toLower();
+        string lowered_nick = nick.toLower();
         GlobalUser* global = lowered_nick in c.users;
 
-        const(char)[] lowered_chan_name = chan_name.toLower();
+        string lowered_chan_name = chan_name.toLower();
         Channel* chan = lowered_chan_name in c.channels;
         if (!chan)
             chan = &(c.channels[lowered_chan_name] = Channel(chan_name));
@@ -189,37 +189,37 @@ static this()
     }
 
     m.listeners["JOIN"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
-            // might have to use args.length == 1 ? args[0].idup : message.idup
+            // might have to use args.length == 1 ? args[0] : message
             // but im not sure if that happens with joins
-            register_user(c, source.get_nick().idup, message.idup);
+            register_user(c, source.get_nick(), message);
             //writeln(c.users);
             //writeln(c.channels);
         });
 
     m.listeners["353"] = new Listener( // NAMES reply
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
             foreach (nick; message.split())
             {
-                register_user!true(c, nick.idup, args[2].idup);
+                register_user!true(c, nick, args[2]);
             }
             //writeln(c.users);
             //writeln(c.channels);
         });
 
     m.listeners["KICK"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
             m.listeners["PART"].f(c, args[1], [], args[0]);
         });
 
     m.listeners["PART"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
-            const(char)[] nick = source.get_nick();
-            string lowered_chan_name = args.length == 1 ? args[0].toLower().idup : message.toLower().idup;
+            string nick = source.get_nick();
+            string lowered_chan_name = args.length == 1 ? args[0].toLower() : message.toLower();
             assert(lowered_chan_name in c.channels,
                    format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
 
@@ -229,7 +229,7 @@ static this()
                 return;
             }
 
-            string lowered_nick = nick.toLower().idup;
+            string lowered_nick = nick.toLower();
             assert(lowered_nick in c.channels[lowered_chan_name].users,
                    format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
             c.channels[lowered_chan_name].users.remove(lowered_nick);
@@ -242,9 +242,9 @@ static this()
         });
 
     m.listeners["QUIT"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
-            string lowered_nick = source.get_nick().toLower().idup;
+            string lowered_nick = source.get_nick().toLower();
             foreach (channel; c.channels)
             {
                 channel.users.remove(lowered_nick);
@@ -255,30 +255,29 @@ static this()
         });
 
     m.listeners["NICK"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
-            string lowered_old_nick = source.get_nick().toLower().idup;
-            string new_nick = message.idup;
-            const(char)[] lowered_new_nick = new_nick.toLower();
+            string lowered_old_nick = source.get_nick().toLower();
+            string lowered_message = message.toLower();
             assert(lowered_old_nick in c.users, format("%s", c.users) ~ "\n" ~ format("%s", c.channels));
 
-            if (lowered_old_nick == lowered_new_nick)
+            if (lowered_old_nick == lowered_message)
             {
-                c.users[lowered_new_nick].cased_name = new_nick;
+                c.users[lowered_message].cased_name = message;
                 return;
             }
 
             GlobalUser* user = lowered_old_nick in c.users;
             assert(user.ref_count);
-            c.users[lowered_new_nick] = GlobalUser(message.idup, -1, user.auth_level, user.ref_count);
+            c.users[lowered_message] = GlobalUser(message, -1, user.auth_level, user.ref_count);
             c.users.remove(lowered_old_nick);
 
             foreach (channel; c.channels)
             {
                 if (LocalUser* luser = lowered_old_nick in channel.users)
                 {
-                    channel.users[lowered_new_nick] =
-                        LocalUser(&c.users[lowered_new_nick], luser.user_channel_flags);
+                    channel.users[lowered_message] =
+                        LocalUser(&c.users[lowered_message], luser.user_channel_flags);
                     channel.users.remove(lowered_old_nick);
                 }
             }
@@ -292,17 +291,17 @@ static this()
          'q': UserChannelFlag.OWNER];
 
     m.listeners["MODE"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
-            //string lowered_nick = source.get_nick().toLower().idup;
+            //string lowered_nick = source.get_nick().toLower();
             //c.send_privmsg("#fusxbottest", "MODE " ~ args.join(' '));
 
             if (args[0].is_channel())
             {
-                Channel* channel = args[0].toLower().idup in c.channels;
+                Channel* channel = args[0].toLower() in c.channels;
                 assert(channel);
 
-                const(char[])[] mode_args = void;
+                string[] mode_args = void;
                 if (args.length >= 3) mode_args = args[2..$];
                 else mode_args = null;
 
@@ -312,42 +311,42 @@ static this()
                 {
                     switch (chr)
                     {
-                        case '+':
-                            currently_adding = true;
-                            break;
+                    case '+':
+                        currently_adding = true;
+                        break;
 
-                        case '-':
-                            currently_adding = false;
-                            break;
+                    case '-':
+                        currently_adding = false;
+                        break;
 
-                        case 'v': case 'h': case 'o': case 'a': case 'q':
-                            assert(mode_args);
-                            LocalUser* user = mode_args[0].toLower().idup in channel.users;
-                            assert(user);
+                    case 'v': case 'h': case 'o': case 'a': case 'q':
+                        assert(mode_args);
+                        LocalUser* user = mode_args[0].toLower() in channel.users;
+                        assert(user);
 
-                            if (currently_adding)
-                            {
-                                assert(!(mode_chars[chr] & user.user_channel_flags));
-                                user.user_channel_flags |= mode_chars[chr];
-                            }
-                            else
-                            {
-                                assert(mode_chars[chr] & user.user_channel_flags);
-                                user.user_channel_flags ^= mode_chars[chr];
-                            }
+                        if (currently_adding)
+                        {
+                            assert(!(mode_chars[chr] & user.user_channel_flags));
+                            user.user_channel_flags |= mode_chars[chr];
+                        }
+                        else
+                        {
+                            assert(mode_chars[chr] & user.user_channel_flags);
+                            user.user_channel_flags ^= mode_chars[chr];
+                        }
 
-                            if (mode_args.length > 1) mode_args = mode_args[1..$];
-                            else mode_args = null;
-                            break;
+                        if (mode_args.length > 1) mode_args = mode_args[1..$];
+                        else mode_args = null;
+                        break;
 
-                        case 'b': case 'e': case 'I':
-                            assert(mode_args);
-                            if (mode_args.length > 1) mode_args = mode_args[1..$];
-                            else mode_args = null;
-                            break;
+                    case 'b': case 'e': case 'I':
+                        assert(mode_args);
+                        if (mode_args.length > 1) mode_args = mode_args[1..$];
+                        else mode_args = null;
+                        break;
 
-                        default:
-                            break;
+                    default:
+                        break;
                     }
                 }
 
@@ -357,18 +356,18 @@ static this()
 
 
     m.listeners["PRIVMSG"] = new Listener(
-        function void(Client c, in char[] source, in char[][] args, in char[] message)
+        function void(Client c, string source, string[] args, string message)
         {
             if (message.length >= 2 && message[0] == COMMAND_CHAR)
             {
-                const(char)[][2] msg = split1(message[1..$], ' ');
+                string[2] msg = split1(message[1..$], ' ');
                 if (Command** p = msg[0] in c.commands)
                 {
                     Command* cmd = *p;
-                    const(char)[] nick = source.get_nick();
-                    string lowered_nick = nick.toLower().idup;
+                    string nick = source.get_nick();
+                    string lowered_nick = nick.toLower();
                     bool in_channel = args[0].is_channel();
-                    const(char)[] channel_name = in_channel ? args[0] : nick;
+                    string channel_name = in_channel ? args[0].toLower() : nick;
 
                     Channel* channel;
                     LocalUser* user;
@@ -387,7 +386,7 @@ static this()
                         guser = lowered_nick in c.users;
                         if (!guser)
                         {
-                            guser = &(c.users[lowered_nick] = GlobalUser(nick.idup));
+                            guser = &(c.users[lowered_nick] = GlobalUser(nick));
                             guser.ref_count = 0;
                         }
                         assert(guser);
@@ -401,8 +400,8 @@ static this()
                             c.send_privmsg("NickServ", "STATUS ", nick);
                             assert(!c.temporary_listener.action);
                             c.temporary_listener = TemporaryListener(
-                                delegate TLOption(in char[] source, in char[] command,
-                                                  in char[][] args, in char[] message)
+                                delegate TLOption(string source, string command,
+                                                  string[] args, string message)
                                 {
                                     if (command == "NOTICE" && source.get_nick() == "NickServ")
                                     {
@@ -412,7 +411,7 @@ static this()
                                             assert(!((lowered_nick in c.users) && (guser.ref_count < 1)));
                                             if (lowered_nick !in c.users)
                                             {
-                                                guser = &(c.users[lowered_nick] = GlobalUser(nick.idup));
+                                                guser = &(c.users[lowered_nick] = GlobalUser(nick));
                                                 guser.ref_count = 0;
                                             }
 
@@ -443,13 +442,27 @@ static this()
                                 c.users.remove(lowered_nick);
                         }
 
-                        if (in_channel && user.user_channel_flags < cmd.min_channel_auth_level)
+
+                        UserChannelFlag mcal = cmd.min_channel_auth_level;
+                        ubyte mal = cmd.min_auth_level;
+                        byte mns = cmd.min_ns_status;
+                        if (auto room_override = channel_name in c.config.room_overrides)
+                        {
+                            if (auto cmdparams = msg[0] in room_override.commands)
+                            {
+                                mcal = cmdparams.min_channel_auth_level;
+                                mal = cmdparams.min_auth_level;
+                                mns = cmdparams.min_ns_status;
+                            }
+                        }
+
+                        if (in_channel && user.user_channel_flags < mcal)
                         {
                             c.send_privmsg(channel_name, "Error - your channel auth level "
                                            "is too low to use this command.");
                             return;
                         }
-                        if (guser.auth_level < cmd.min_auth_level)
+                        if (guser.auth_level < mal)
                         {
                             if (depth <= 1)
                                 ns_verify_and_rerun_command();
@@ -457,7 +470,7 @@ static this()
                                 c.send_privmsg(channel_name, "Error - you are not allowed to use this command.");
                             return;
                         }
-                        if (guser.ns_status < cmd.min_ns_status)
+                        if (guser.ns_status < mns)
                         {
                             if (depth <= 1)
                                 ns_verify_and_rerun_command();
