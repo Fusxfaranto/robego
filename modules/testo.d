@@ -18,6 +18,12 @@ static this()
             module_data.register_module_data!testo_array([67, 1434]);
         };
 
+    m.commands["chaos"] = new Command(
+        function void(Client c, string source, string channel, string message)
+        {
+            c.send_privmsg(channel, "lose");
+        }, -1, UserChannelFlag.NONE, 50);
+
     m.commands["testo"] = new Command(
         function void(Client c, string source, string channel, string message)
         {

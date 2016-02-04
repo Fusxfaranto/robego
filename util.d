@@ -97,7 +97,7 @@ void aa_merge_inplace(T, U, S)(ref T[S] a, ref U[S] b, T function(T, U) pure cal
     }
 }
 
-// TODO: maybe just replace with a PQ
+// TODO: replace with a PQ lol...
 class SortedList(T, alias f) if(is(typeof(binaryFun!f(T.init, T.init)) == bool))
 {
 private:
@@ -244,23 +244,23 @@ T static_json(T)(auto ref in JSONValue json)
 }
 
 
-T aa_diff(alias f, T : U[V], U, V)(T a, T b)
-    if(is(typeof(binaryFun!f(ValueType!T.init, ValueType!T.init)) == bool))
+T aa_diff(alias f, T : U[V], U, V)(T a, T b) if
+    (is(typeof(binaryFun!f(ValueType!T.init, ValueType!T.init)) == bool))
+{
+    alias pred = binaryFun!f;
+    T o;
+    foreach (V key, U value; a)
     {
-        alias pred = binaryFun!f;
-        T o;
-        foreach (V key, U value; a)
+        if (auto p = key in b)
         {
-            if (auto p = key in b)
-            {
-                if (!pred(*p, value))
-                    o[key] = value;
-            }
-            else
+            if (!pred(*p, value))
                 o[key] = value;
         }
-        return o;
+        else
+            o[key] = value;
     }
+    return o;
+}
 
 bool deep_compare(T)(T a, T b)
 {
@@ -292,6 +292,26 @@ bool deep_compare(T)(T a, T b)
             return a == b;
         }
     }
+}
+
+V* get_create(K, V)(ref V[K] aa, string key, lazy V value = V.init)
+{
+    auto p = key in aa;
+    if (p)
+    {
+        return p;
+    }
+    return &(aa[key] = value());
+}
+V* assign_create(K, V)(ref V[K] aa, string key, lazy V value = V.init)
+{
+    auto p = key in aa;
+    if (p)
+    {
+        *p = value;
+        return p;
+    }
+    return &(aa[key] = value());
 }
 
 T idup_elems(T : U[], U)(T a)

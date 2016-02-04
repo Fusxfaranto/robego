@@ -28,6 +28,25 @@ enum long SELECT_WAIT_MICROSECONDS = 0;
 enum long SELECT_WAIT_SECONDS = 1;
 
 
+
+
+struct UserChannelFlag_
+{
+    UserChannelFlag f;
+    alias f this;
+
+    this(in JSONValue json)
+    {
+        f = auth_chars[json.str()[0]];
+    }
+
+    this(UserChannelFlag f_)
+    {
+        f = f_;
+    }
+}
+
+
 final class Client
 {
 private:
@@ -39,6 +58,7 @@ private:
 public:
     struct Config
     {
+        // TODO: keep these up with network state (i.e. take out of config)
         string nick;
         string username;
         string realname;
@@ -60,24 +80,7 @@ public:
             struct CommandParams
             {
                 byte min_ns_status;
-
-                struct UserChannelFlag_
-                {
-                    UserChannelFlag f;
-                    alias f this;
-
-                    this(in JSONValue json)
-                    {
-                        f = auth_chars[json.str()[0]];
-                    }
-
-                    this(UserChannelFlag f_)
-                    {
-                        f = f_;
-                    }
-                }
                 UserChannelFlag_ min_channel_auth_level;
-
                 ubyte min_auth_level;
             }
             CommandParams[string] commands;
@@ -85,6 +88,8 @@ public:
         RoomOverride[string] room_overrides;
     }
     Config config;
+
+    UserChannelFlag_[string][string] channel_auth_overrides;
 
     GlobalUser[string] users;
     Channel[string] channels;
@@ -107,6 +112,8 @@ public:
     this(string config_filename)
     {
         config = static_json!Config(parseJSON(readText(config_filename)));
+        channel_auth_overrides = static_json!(UserChannelFlag_[string][string])(
+            parseJSON(readText("channel_auth_overrides.json")));
 
         sockset = new SocketSet(8); // TODO: figure out why this needs to be 8
         // init irc_socket

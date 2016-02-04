@@ -421,6 +421,7 @@ static this()
 
                                             if (auto ovr = lowered_nick in c.config.auth_level_overrides)
                                             {
+                                                // TODO: do this differently for "underrides"?
                                                 if (guser.ns_status >= ovr.min_ns_status)
                                                 {
                                                     guser.auth_level = ovr.auth_level;
@@ -433,13 +434,6 @@ static this()
                                     }
                                     return TLOption.QUEUE;
                                 });
-                        }
-
-                        scope(exit)
-                        {
-                            assert(!(in_channel && guser.ref_count == 0));
-                            if (!in_channel && guser.ref_count == 0)
-                                c.users.remove(lowered_nick);
                         }
 
 
@@ -455,11 +449,30 @@ static this()
                                 mns = cmdparams.min_ns_status;
                             }
                         }
+                        if (auto channel_auth_override = channel_name in c.channel_auth_overrides)
+                        {
+                            if (auto min_channel_auth_level = msg[0] in *channel_auth_override)
+                            {
+                                if (mcal == cmd.min_channel_auth_level ||
+                                    *min_channel_auth_level > mcal)
+                                {
+                                    mcal = *min_channel_auth_level;
+                                }
+                            }
+                        }
 
-                        if (in_channel && user.user_channel_flags < mcal)
+                        scope(exit)
+                        {
+                            assert(!(in_channel && guser.ref_count == 0));
+                            if (!in_channel && guser.ref_count == 0)
+                                c.users.remove(lowered_nick);
+                        }
+
+                        if (in_channel && user.user_channel_flags < mcal && guser.auth_level < 250)
                         {
                             c.send_privmsg(channel_name, "Error - your channel auth level "
-                                           "is too low to use this command.");
+                                           "is too low to use this command (requires " ~
+                                           auth_chars_by_level[mcal] ~ ").");
                             return;
                         }
                         if (guser.auth_level < mal)
@@ -486,4 +499,79 @@ static this()
                 }
             }
         });
+
+
+    m.commands["restrictcommand"] = new Command(
+        function void(Client c, string source, string channel, string message)
+        {
+            if (!channel.is_channel())
+            {
+                // TODO: generalize this
+                c.send_privmsg(channel, "Error - this command can only be used in a channel.");
+                return;
+            }
+
+            string[2] args = split1(message, ' ');
+
+            auto cao = get_create(c.channel_auth_overrides, channel);
+
+            if (args[1].length == 0)
+            {
+                if (args[0].length == 0)
+                {
+                    c.send_privmsg(channel, "Usage - " ~ COMMAND_CHAR ~
+                                   "restrictcommand [command] [auth level]");
+                }
+                else
+                {
+                    c.send_privmsg(channel, "Error - must provide an auth level symbol.");
+                }
+                return;
+            }
+
+            if (args[0] !in c.commands)
+            {
+                c.send_privmsg(channel, "Error - invalid command name " ~ args[0] ~ ".");
+                return;
+            }
+
+            UserChannelFlag level;
+            if (auto p = args[1][0] in input_auth_chars)
+            {
+                level = *p;
+            }
+            else
+            {
+                c.send_privmsg(channel, "Error - invalid auth level symbol \"" ~ args[1][0] ~ "\".");
+                return;
+            }
+
+            assign_create(*cao, args[0], UserChannelFlag_(level));
+
+            import std.json : JSONValue;
+            import std.file : write, rename, remove, exists;
+
+            JSONValue j = (JSONValue[string]).init;
+            foreach (k, v; c.channel_auth_overrides)
+            {
+                j[k] = (JSONValue[string]).init;
+
+                foreach (k2, v2; v)
+                {
+                    j[k][k2] = auth_chars_by_level[v2].to!string();
+                }
+            }
+
+            if (exists("channel_auth_overrides.json.bak"))
+            {
+                remove("channel_auth_overrides.json.bak");
+            }
+            rename("channel_auth_overrides.json", "channel_auth_overrides.json.bak");
+            write("channel_auth_overrides.json", j.toPrettyString());
+
+            c.send_privmsg(channel, "Command " ~ args[0] ~
+                           " successfully restricted to access level \"" ~ args[1][0] ~ "\".");
+
+        }, 3, UserChannelFlag.HOP, 50);
+
 }

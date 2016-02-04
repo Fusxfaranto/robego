@@ -26,7 +26,7 @@ static ~this()
 }
 
 
-// TODO: unnullable pointers?
+// TODO: config reloading
 // TODO: idle action system
 // TODO: constants file
 // TODO: remove uds system if i haven't decided to actually make it useful by release time

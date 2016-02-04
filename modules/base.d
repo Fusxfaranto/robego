@@ -41,11 +41,22 @@ static this()
             c.send_part(message);
         }, 3, UserChannelFlag.NONE, 240);
 
+    m.listeners["INVITE"] = new Listener(
+        function void(Client c, string source, string[] args, string message)
+        {
+            assert(args.length == 1);
+            // TODO: better lowercase comparison?
+            if (args[0].toLower() == c.config.nick.toLower())
+            {
+                c.send_join(message);
+            }
+        });
+
     m.listeners["PING"] = new Listener(
         function void(Client c, string source, string[] args, string message)
         {
             c.send_raw("PONG :", message);
-            debug writeln("sent pong");
+            //debug writeln("sent pong");
             if (!c.ready)
             {
                 c.ready = true;
