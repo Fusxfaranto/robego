@@ -369,6 +369,18 @@ static this()
                     bool in_channel = args[0].is_channel();
                     string channel_name = in_channel ? args[0].toLower() : nick;
 
+                    if (in_channel && cmd.channel_restriction == ChannelRestriction.PM)
+                    {
+                        c.send_privmsg(channel_name,
+                                       "Error - this command can only be used in a private message.");
+                        return;
+                    }
+                    else if (!in_channel && cmd.channel_restriction == ChannelRestriction.CHAN)
+                    {
+                        c.send_privmsg(channel_name, "Error - this command can only be used in a channel.");
+                        return;
+                    }
+
                     Channel* channel;
                     LocalUser* user;
                     GlobalUser* guser;
@@ -488,7 +500,8 @@ static this()
                             if (depth <= 1)
                                 ns_verify_and_rerun_command();
                             else
-                                c.send_privmsg(args[0], "Error - you must be identified to use this command.");
+                                c.send_privmsg(channel_name,
+                                               "Error - you must be identified to use this command.");
                             return;
                         }
 
@@ -504,13 +517,6 @@ static this()
     m.commands["restrictcommand"] = new Command(
         function void(Client c, string source, string channel, string message)
         {
-            if (!channel.is_channel())
-            {
-                // TODO: generalize this
-                c.send_privmsg(channel, "Error - this command can only be used in a channel.");
-                return;
-            }
-
             string[2] args = split1(message, ' ');
 
             auto cao = get_create(c.channel_auth_overrides, channel);
@@ -572,6 +578,6 @@ static this()
             c.send_privmsg(channel, "Command " ~ args[0] ~
                            " successfully restricted to access level \"" ~ args[1][0] ~ "\".");
 
-        }, 3, UserChannelFlag.HOP, 50);
+        }, 3, UserChannelFlag.HOP, 50, ChannelRestriction.CHAN);
 
 }
