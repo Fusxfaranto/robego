@@ -166,7 +166,7 @@ static this()
             {
                 c.send_privmsg(channel, "Error reloading pokemon data.");
             }
-        }, -1, UserChannelFlag.NONE, 50);
+        }, -1, UserChannelFlag.NONE, 200);
 
     m.commands["stats"] = new Command(
         function void(Client c, string source, string channel, string message)
