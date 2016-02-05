@@ -87,7 +87,7 @@ static this()
         {
             if (message != "blfff")
             {
-                c.send_privmsg(args[0], "blfff");
+                //c.send_privmsg(args[0], "blfff");
             }
         }, false, "stupid");
 }

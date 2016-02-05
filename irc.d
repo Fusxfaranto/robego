@@ -205,7 +205,7 @@ public:
         reload_dynamics(module_data, commands, listeners);
         debug writeln(commands);
         debug writeln(listeners);
-        debug writeln(module_data);
+        //debug writeln(module_data);
         //debug if (ready) send_raw("PRIVMSG #fusxbottest :reloaded");
     }
 
@@ -562,6 +562,7 @@ void send_part(Client c, string channel)
     c.send_raw("PART :", channel);
     //c.channels.remove(channel.idup);
 }
+
 
 void register_module_data(alias var, T = typeof(*var), string name = var.stringof)
     (ref Variant[string] module_data, T value = T.init) if (is(typeof(*var)))

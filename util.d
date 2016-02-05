@@ -13,6 +13,9 @@ import std.json : JSONValue, JSON_TYPE, JSONException;
 import std.exception : enforce;
 
 
+// this is for use as a default lazy void parameter
+void noop() {}
+
 const(inout(char)[][2]) splitN(int n : 1)(inout(char)[] s, in char delim) pure nothrow @safe
 {
     foreach (i, c; s)
@@ -194,6 +197,14 @@ T static_json(T)(auto ref in JSONValue json)
     else static if (__traits(isIntegral, T))
     {
         return to!T(json.integer());
+    }
+    else static if (__traits(isFloating, T))
+    {
+        if (json.type() == JSON_TYPE.INTEGER)
+        {
+            return to!T(json.integer());
+        }
+        return to!T(json.floating());
     }
     else static if (is(T == string))
     {

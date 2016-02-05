@@ -69,7 +69,7 @@ void import_from_loaded_sos(ref Variant[string] module_data, ref Command*[string
             else
                 debug writeln("no init function");
 
-            debug writeln(module_data);
+            //debug writeln(module_data);
         }
     }
     commands.rehash();
